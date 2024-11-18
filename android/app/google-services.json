@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1061160585967",
+    "project_id": "climbleaf-be9d2",
+    "storage_bucket": "climbleaf-be9d2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1061160585967:android:654a96a1dd53b398dae91a",
+        "android_client_info": {
+          "package_name": "com.example.climb_leaf2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1kpRlb_RjtsVgckSkaEv4p9vonylOVOU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,14 +15,16 @@ class MyApp extends StatelessWidget {
   }
 }
 
+//타임테이블 위젯 스테이트 전달?
 class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key});
 
   @override
   State<TimetablePage> createState() => _TimetablePageState();
 }
-
+//타임테이블 페이지 스테이트 관리 - 엥 여기가 다 감싸고 있는데?
 class _TimetablePageState extends State<TimetablePage> {
+  //state저장
   final int hoursInDay = 24;
   final List<String> days = ['월', '화', '수', '목', '금', '토', '일'];
   late final PageController pageController;
@@ -30,11 +32,15 @@ class _TimetablePageState extends State<TimetablePage> {
   String currentDay = '월';
 
   @override
-  void initState() {
-    super.initState();
-    pageController = PageController(initialPage: 0); // 초기 페이지 설정
+  //initstate? 있었는데 didChangeDepen~ 으로 변경함.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    pageController = PageController(initialPage: 0);
     pageController.addListener(_onPageChanged);
-    currentDay = days[0]; // 초기 요일 설정
+    if (pageController.hasClients) {
+      currentDay = days[pageController.page?.round() ?? 0];
+    }
   }
 
   @override
