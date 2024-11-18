@@ -136,6 +136,74 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
+  void _showCustomModal(BuildContext context) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54, // 배경 색상
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Align(
+          alignment: Alignment.topCenter,
+          child: Container(
+            height: 700, // 전체 모달창 크기
+            width: MediaQuery.of(context).size.width , // 좌측 여백 설정
+            margin: const EdgeInsets.only(top: 0),
+            padding: const EdgeInsets.only(top:50), // 내부 여백 설정
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(43),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // 제목 및 텍스트 영역
+                Column(
+                  children: [
+                    Text(
+                      "Custom Modal",
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                    SizedBox(height: 20), // 제목과 문장 사이의 간격
+                    Text(
+                      "This modal slides from the top!",
+                      style: TextStyle(fontSize: 16), // 적절한 폰트 크기 설정
+                      textAlign: TextAlign.center, // 중앙 정렬
+                    ),
+                  ],
+                ),
+                // 버튼 영역
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text("Close"),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final offsetAnimation =
+        Tween<Offset>(begin: Offset(0, -1), end: Offset(0, 0)).animate(animation);
+        return SlideTransition(
+          position: offsetAnimation,
+          child: child,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -148,21 +216,9 @@ class _TimetablePageState extends State<TimetablePage> {
             onPressed: () => showSummaryModal(context),
           ),
           IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              if (pageController.page! > 0) {
-                pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.arrow_forward),
-            onPressed: () {
-              if (pageController.page! < days.length - 1) {
-                pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-              }
-            },
-          ),
+            icon: const Icon(Icons.calendar_month),
+              onPressed: () => _showCustomModal(context)),
+
         ],
       ),
       body: PageView.builder(
