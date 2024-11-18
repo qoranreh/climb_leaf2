@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 void main() {
   runApp(const MyApp());
@@ -10,6 +12,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+        debugShowCheckedModeBanner: false,
       home: const TimetablePage(),
     );
   }
@@ -30,6 +33,7 @@ class _TimetablePageState extends State<TimetablePage> {
   late final PageController pageController;
   List<List<List<String>>> timetable = List.generate(7, (index) => List.generate(24, (i) => []));
   String currentDay = '월';
+
 
   @override
   //initstate? 있었는데 didChangeDepen~ 으로 변경함.
@@ -111,6 +115,7 @@ class _TimetablePageState extends State<TimetablePage> {
     }
     return summary;
   }
+
 
   void showSummaryModal(BuildContext context) {
     Map<String, int> summary = getTaskSummary();
@@ -201,6 +206,7 @@ class _TimetablePageState extends State<TimetablePage> {
           );
         },
       ),
+
     );
   }
 }
