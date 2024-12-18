@@ -25,18 +25,18 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue, // 로딩 화면 배경색
+      backgroundColor: Colors.white, // 로딩 화면 배경색
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: const [
             // 앱 이름
             Text(
-              'My Awesome App', // 앱 이름을 표시
+              'Climbleaf', // 앱 이름을 표시
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Colors.black,
               ),
             ),
             SizedBox(height: 16),
