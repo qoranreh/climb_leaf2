@@ -105,17 +105,28 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   // Firestore에 주차별 데이터 저장--
-  //error 에러 여기서 에러발생.. 중첩문때문?
+  //error 에러 여기서 에러발생.. 중첩문때문?--
   Future<void> _saveWeekData() async {
     try {
+      Map<String, dynamic> serializedTimetable = {};
+      for (int dayIndex = 0; dayIndex < timetable.length; dayIndex++) {
+        Map<String, List<String>> dayMap = {};
+        for (int hourIndex = 0; hourIndex < timetable[dayIndex].length; hourIndex++) {
+          dayMap[hourIndex.toString()] = timetable[dayIndex][hourIndex];
+        }
+        serializedTimetable[dayIndex.toString()] = dayMap;
+      }
+
       await _firestore.collection('timetables').doc(currentWeekKey).set({
-        'days': timetable.map((day) => day.map((hour) => hour.toList()).toList()).toList(),
+        'days': serializedTimetable,
       });
+
       print('Data saved for week: $currentWeekKey');
     } catch (e) {
       print('Error saving week data: $e');
     }
   }
+
 
   // Firestore에서 주차별 데이터 로드
   Future<void> _loadWeekData() async {
