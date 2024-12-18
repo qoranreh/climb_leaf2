@@ -136,20 +136,26 @@ class _TimetablePageState extends State<TimetablePage> {
         final data = doc.data();
         if (data != null && data['days'] != null) {
           setState(() {
-            timetable = (data['days'] as List<dynamic>).map((day) {
-              return (day as List<dynamic>).map((hour) {
-                return List<String>.from(hour as List<dynamic>);
-              }).toList();
-            }).toList();
+            timetable = List.generate(7, (dayIndex) {
+              // Firestore의 Map 데이터를 읽어오고, 없는 경우 빈 맵으로 대체
+              final dayMap = data['days'][dayIndex.toString()] as Map<String, dynamic>? ?? {};
+              return List.generate(24, (hourIndex) {
+                // Map에서 시간별 데이터 가져오기. 없으면 빈 리스트 반환
+                return List<String>.from(dayMap[hourIndex.toString()] ?? []);
+              });
+            });
           });
+        } else {
+          print('No data in days field for week: $currentWeekKey');
         }
       } else {
-        print('No data for week: $currentWeekKey. Initializing empty data.');
+        print('No document found for week: $currentWeekKey. Initializing empty data.');
       }
     } catch (e) {
       print('Error loading week data: $e');
     }
   }
+
 
   PageRouteBuilder _createCalendarPageRoute() {
     return PageRouteBuilder(
@@ -195,6 +201,11 @@ class _TimetablePageState extends State<TimetablePage> {
         controller: pageController,
         itemCount: days.length,
         scrollDirection: Axis.horizontal,
+        onPageChanged: (int pageIndex){
+          setState(() {
+            currentDay=days[pageIndex];
+          });
+        },
         itemBuilder: (context, dayIndex) {
           return ListView.builder(
             itemCount: hoursInDay,
