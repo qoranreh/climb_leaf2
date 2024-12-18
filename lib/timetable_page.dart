@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'calendar_page.dart';
+
 
 class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key});
@@ -13,18 +15,23 @@ class _TimetablePageState extends State<TimetablePage> {
   final int hoursInDay = 24;
   final List<String> days = ['월', '화', '수', '목', '금', '토', '일'];
   late final PageController pageController;
+
   List<List<List<String>>> timetable =
-  List.generate(7, (index) => List.generate(24, (i) => []));
+  List.generate(7, (index) => List.generate(24, (i) => [])); // 일주일 데이터 저장
+
+  String currentWeekKey = ""; // 현재 주를 나타내는 키 (yyyy-MM-dd)
   String currentDay = '월';
+  DateTime selectedDates = DateTime.now(); // 선택된 날짜
+  DateTime focusedDates = DateTime.now(); // 캘린더에서 포커스된 날짜
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  void didChangeDependencies() {//페이지
-    super.didChangeDependencies();
+  void initState() {
+    super.initState();
     pageController = PageController(initialPage: 0);
-    pageController.addListener(_onPageChanged);
-    if (pageController.hasClients) {
-      currentDay = days[pageController.page?.round() ?? 0];
-    }
+    currentWeekKey = _getWeekKey(DateTime.now()); // 주 키 계산
+    _loadWeekData(); // 현재 주 데이터 Firestore에서 로드
   }
 
   @override
@@ -42,10 +49,19 @@ class _TimetablePageState extends State<TimetablePage> {
     }
   }
 
+  // 주의 시작일을 키로 사용 (yyyy-MM-dd 형식)
+  String _getWeekKey(DateTime date) {
+    DateTime monday = date.subtract(Duration(days: date.weekday - 1));
+    return monday.toIso8601String().split('T').first; // yyyy-MM-dd
+  }
+
+  //timetable에 저장한 데이터 파이어베이스 저장
   void addTask(int dayIndex, int hourIndex) {
     setState(() {
-      timetable[dayIndex][hourIndex].add('New Task');
+      timetable[dayIndex][hourIndex].add('New Task');//중첩문서 에러 발생?
     });
+    print('Saving week data...');
+    _saveWeekData(); // Firestore에 데이터 저장
   }
 
   void editTask(
@@ -67,6 +83,7 @@ class _TimetablePageState extends State<TimetablePage> {
                   timetable[dayIndex][hourIndex][taskIndex] =
                       textController.text;
                 });
+                _saveWeekData(); // Firestore에 데이터 저장
                 Navigator.of(context).pop();
               },
               child: const Text('OK'),
@@ -76,6 +93,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 setState(() {
                   timetable[dayIndex][hourIndex].removeAt(taskIndex);
                 });
+                _saveWeekData(); // Firestore에 데이터 저장
                 Navigator.of(context).pop();
               },
               child: const Text('Delete'),
@@ -86,35 +104,40 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  Map<String, int> getTaskSummary() {
-    Map<String, int> summary = {};
-    for (var day in timetable) {
-      for (var hourTasks in day) {
-        for (var task in hourTasks) {
-          summary[task] = (summary[task] ?? 0) + 1;
-        }
-      }
+  // Firestore에 주차별 데이터 저장--
+  //error 에러 여기서 에러발생.. 중첩문때문?
+  Future<void> _saveWeekData() async {
+    try {
+      await _firestore.collection('timetables').doc(currentWeekKey).set({
+        'days': timetable.map((day) => day.map((hour) => hour.toList()).toList()).toList(),
+      });
+      print('Data saved for week: $currentWeekKey');
+    } catch (e) {
+      print('Error saving week data: $e');
     }
-    return summary;
   }
 
-  void showSummaryModal(BuildContext context) {
-    Map<String, int> summary = getTaskSummary();
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(16.0),
-          child: ListView(
-            children: summary.entries.map((entry) {
-              return ListTile(
-                title: Text('${entry.key}: ${entry.value}'),
-              );
-            }).toList(),
-          ),
-        );
-      },
-    );
+  // Firestore에서 주차별 데이터 로드
+  Future<void> _loadWeekData() async {
+    try {
+      final doc = await _firestore.collection('timetables').doc(currentWeekKey).get();
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['days'] != null) {
+          setState(() {
+            timetable = (data['days'] as List<dynamic>).map((day) {
+              return (day as List<dynamic>).map((hour) {
+                return List<String>.from(hour as List<dynamic>);
+              }).toList();
+            }).toList();
+          });
+        }
+      } else {
+        print('No data for week: $currentWeekKey. Initializing empty data.');
+      }
+    } catch (e) {
+      print('Error loading week data: $e');
+    }
   }
 
   PageRouteBuilder _createCalendarPageRoute() {
@@ -150,10 +173,11 @@ class _TimetablePageState extends State<TimetablePage> {
             onPressed: () => showSummaryModal(context),
           ),
           IconButton(
-              icon: const Icon(Icons.calendar_month),
-              onPressed: () {
-                Navigator.of(context).push(_createCalendarPageRoute());
-              }),
+            icon: const Icon(Icons.calendar_month),
+            onPressed: () {
+              Navigator.of(context).push(_createCalendarPageRoute());
+            },
+          ),
         ],
       ),
       body: PageView.builder(
@@ -168,11 +192,13 @@ class _TimetablePageState extends State<TimetablePage> {
                 onDoubleTap: () => addTask(dayIndex, hourIndex),
                 child: Row(
                   children: [
-                    SizedBox(
+                    // 시간 표시
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(10, 0, 0, 0),
                       width: 60,
-                      child:
-                      Text('${hourIndex.toString().padLeft(2, '0')}:00'),
+                      child: Text('${hourIndex.toString().padLeft(2, '0')}:00'),
                     ),
+                    // 작업 목록 표시
                     Container(
                       width: 200,
                       height: 50,
@@ -180,11 +206,9 @@ class _TimetablePageState extends State<TimetablePage> {
                         scrollDirection: Axis.horizontal,
                         itemCount: timetable[dayIndex][hourIndex].length,
                         itemBuilder: (context, taskIndex) {
-                          String task =
-                          timetable[dayIndex][hourIndex][taskIndex];
+                          String task = timetable[dayIndex][hourIndex][taskIndex];
                           return Padding(
-                            padding:
-                            const EdgeInsets.symmetric(horizontal: 4.0),
+                            padding: const EdgeInsets.symmetric(horizontal: 2.0),
                             child: TextButton(
                               onPressed: () => editTask(
                                   context, dayIndex, hourIndex, taskIndex),
@@ -202,5 +226,36 @@ class _TimetablePageState extends State<TimetablePage> {
         },
       ),
     );
+  }
+
+  void showSummaryModal(BuildContext context) {
+    Map<String, int> summary = getTaskSummary();
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(16.0),
+          child: ListView(
+            children: summary.entries.map((entry) {
+              return ListTile(
+                title: Text('${entry.key}: ${entry.value}'),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  Map<String, int> getTaskSummary() {
+    Map<String, int> summary = {};
+    for (var day in timetable) {
+      for (var hourTasks in day) {
+        for (var task in hourTasks) {
+          summary[task] = (summary[task] ?? 0) + 1;
+        }
+      }
+    }
+    return summary;
   }
 }
