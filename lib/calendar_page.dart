@@ -70,7 +70,7 @@ class _CalendarPageState extends State<CalendarPage> {
           },
           calendarStyle: const CalendarStyle(
             todayDecoration: BoxDecoration(
-              color: Colors.blueAccent,
+              color: Colors.black12,
               shape: BoxShape.circle,
             ),
             selectedDecoration: BoxDecoration(

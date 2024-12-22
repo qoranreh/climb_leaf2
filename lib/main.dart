@@ -4,6 +4,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'timetable_page.dart';
 import 'calendar_page.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,27 +27,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          dialogBackgroundColor: Colors.white,
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white, // 버튼 배경색
-              foregroundColor: Colors.black, // 버튼 텍스트 색상
-              textStyle: const TextStyle(fontSize: 16), // 텍스트 스타일
-            ),
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.black, // TextButton 텍스트 색상
-            ),
-          ),
-          appBarTheme: AppBarTheme(
-            backgroundColor: Colors.white, // 모든 AppBar의 배경색
-            foregroundColor: Colors.black, // 모든 AppBar의 텍스트 및 아이콘 색상
-          ),
-          primarySwatch: Colors.grey, // 앱 전체 색상을 변경
-          scaffoldBackgroundColor: Colors.white, // Scaffold의 기본 배경색 변경
-        ),
+      theme: appTheme(),
       home: const SplashScreen(), // 초기 화면을 SplashScreen으로 설정
     );
   }

@@ -241,14 +241,14 @@ class _TimetablePageState extends State<TimetablePage> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: selectedTask == task
-                              ? Colors.blue
-                              : Colors.grey[300],
+                              ? Colors.white
+                              : Colors.black,
                         ),
                         child: Text(
                           task,
                           style: TextStyle(
                             color: selectedTask == task
-                                ? Colors.white
+                                ? Colors.red
                                 : Colors.black,
                           ),
                         ),
@@ -274,7 +274,7 @@ class _TimetablePageState extends State<TimetablePage> {
                             spots: _generateSpots(),
                             isCurved: true,
                             gradient: LinearGradient(
-                              colors: [Colors.blue, Colors.lightBlueAccent],
+                              colors: [Colors.red, Colors.white],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
