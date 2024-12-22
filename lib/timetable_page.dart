@@ -27,7 +27,7 @@ class _TimetablePageState extends State<TimetablePage> {
   @override
   void initState() {
     super.initState();
-    pageController = PageController(initialPage: 0); // 페이지 컨트롤러 초기화
+    pageController = PageController(initialPage: selectedDates.weekday - 1); // 현재 요일에 맞는 페이지로 초기화
     currentWeekKey = _getWeekKey(selectedDates); // 주 키 계산
     _loadWeekData(); // 현재 주 데이터 Firestore에서 로드
   }
@@ -37,6 +37,7 @@ class _TimetablePageState extends State<TimetablePage> {
     pageController.dispose();
     super.dispose();
   }
+
   // 작업 추가 메서드
   void addTask(int dayIndex, int hourIndex) {
     // 특정 요일(dayIndex)와 시간(hourIndex)에 작업 추가
@@ -91,11 +92,12 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   void _onPageChanged(int pageIndex) {
-    // PageView에서 현재 페이지가 변경되었을 때 호출
     setState(() {
       currentDay = days[pageIndex]; // 현재 요일 갱신
-      // 선택된 날짜를 현재 페이지의 요일에 맞게 갱신
-      selectedDates = selectedDates.add(Duration(days: pageIndex - selectedDates.weekday + 1));
+
+      // 선택된 날짜를 페이지 인덱스에 맞게 변경
+      int difference = pageIndex - (selectedDates.weekday - 1);
+      selectedDates = selectedDates.add(Duration(days: difference)); // 정확한 날짜 갱신
       currentWeekKey = _getWeekKey(selectedDates); // 주 키 갱신
       _loadWeekData(); // Firestore에서 새 데이터 로드
     });
@@ -103,30 +105,32 @@ class _TimetablePageState extends State<TimetablePage> {
 
   // 주의 시작일을 키로 사용 (yyyy-MM-dd 형식)
   String _getWeekKey(DateTime date) {
-    DateTime monday = date.subtract(Duration(days: date.weekday - 1));
-    return monday.toIso8601String().split('T').first; // yyyy-MM-dd
+    DateTime monday = date.subtract(Duration(days: date.weekday - 1)); // 해당 주의 월요일 계산
+    return monday.toIso8601String().split('T').first; // yyyy-MM-dd 포맷 반환
   }
 
   Future<void> _navigateToCalendarPage() async {
     final selectedDayFromCalendar = await Navigator.of(context).push<DateTime>(
       MaterialPageRoute(
         builder: (context) => CalendarPage(
-          selectedDay: selectedDates, // 현재 선택된 날짜를 전달
-          focusedDay: focusedDates, // 현재 포커스된 날짜를 전달
+          selectedDay: selectedDates,
+          focusedDay: focusedDates,
         ),
       ),
     );
 
     if (selectedDayFromCalendar != null) {
       setState(() {
-        selectedDates = selectedDayFromCalendar; // 선택된 날짜로 갱신
-        focusedDates = selectedDayFromCalendar; // 포커스된 날짜 갱신
-        currentDay = days[selectedDates.weekday - 1]; // 요일 갱신
-        currentWeekKey = _getWeekKey(selectedDates); // 주 키 갱신
-        _loadWeekData(); // Firestore에서 새 데이터 로드
+        selectedDates = selectedDayFromCalendar;
+        focusedDates = selectedDayFromCalendar;
+        currentDay = days[selectedDates.weekday - 1];
+        currentWeekKey = _getWeekKey(selectedDates); // 주차 계산
+        pageController.jumpToPage(selectedDates.weekday - 1); // 선택된 요일로 이동
+        _loadWeekData(); // Firestore 데이터 로드
       });
     }
   }
+
 
   // Firestore에 주차별 데이터 저장
   Future<void> _saveWeekData() async {
@@ -159,30 +163,52 @@ class _TimetablePageState extends State<TimetablePage> {
         if (data != null && data['days'] != null) {
           setState(() {
             timetable = List.generate(7, (dayIndex) {
-              // Firestore의 Map 데이터를 읽어오고, 없는 경우 빈 맵으로 대체
+              // Firestore의 Map 데이터를 읽어오고, 없는 경우 빈 데이터 생성
               final dayMap = data['days'][dayIndex.toString()] as Map<String, dynamic>? ?? {};
               return List.generate(24, (hourIndex) {
-                // Map에서 시간별 데이터 가져오기. 없으면 빈 리스트 반환
-                return List<String>.from(dayMap[hourIndex.toString()] ?? []);
+                return List<String>.from(dayMap[hourIndex.toString()] ?? []); // 빈 리스트 기본값
               });
             });
           });
         } else {
+          // 문서는 있지만 데이터가 없는 경우
           print('No data in days field for week: $currentWeekKey');
+          _initializeEmptyTimetable(); // 빈 데이터로 초기화
         }
       } else {
+        // 문서가 없는 경우
         print('No document found for week: $currentWeekKey. Initializing empty data.');
+        _initializeEmptyTimetable(); // 빈 데이터로 초기화
       }
     } catch (e) {
       print('Error loading week data: $e');
+      _initializeEmptyTimetable(); // 에러 발생 시 기본값 설정
     }
   }
 
-  // 반드시 build 메서드를 구현해야 합니다!
+// 빈 데이터 초기화 함수
+  void _initializeEmptyTimetable() {
+    setState(() {
+      timetable = List.generate(7, (index) => List.generate(24, (i) => [])); // 빈 리스트 생성
+    });
+  }
+
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: Padding(
+            padding: const EdgeInsets.only(left: 8.0),
+            child: Center(
+                child: Text(
+                  '${selectedDates.month}/${selectedDates.day}', // 현재 날짜 (MM/DD 형식)
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),)),
         title: Text(currentDay, style: const TextStyle(fontSize: 24)),
         centerTitle: true,
         actions: [
@@ -238,4 +264,3 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 }
-
