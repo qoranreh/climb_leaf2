@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
 
 ThemeData appTheme() {
   return ThemeData(
@@ -39,3 +40,7 @@ ThemeData appTheme() {
     scaffoldBackgroundColor: Colors.white, // Scaffold의 기본 배경색
   );
 }
+
+//그림자 넣기(나중에 추가  ㄱㄱ)
+
+

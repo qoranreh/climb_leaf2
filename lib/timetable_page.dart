@@ -1,3 +1,4 @@
+import 'package:climb_leaf2/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'calendar_page.dart';
@@ -179,41 +180,62 @@ class _TimetablePageState extends State<TimetablePage> {
     DateTime now = DateTime.now();
     List<DateTime> currentMonthDates = List.generate(
       now.day,
-      (index) => DateTime(now.year, now.month, 1).add(Duration(days: index)),
+          (index) => DateTime(now.year, now.month, 1).add(Duration(days: index)),
     );
 
     // 2. Firestore에서 데이터를 가져오기
-    List<int> taskCounts = List.filled(31, 0); // 최대 크기 31
-    Map<String, int> taskSummary = getTaskSummary(); // 입력된 task 요약
-    String selectedTask =
-        taskSummary.isNotEmpty ? taskSummary.keys.first : ''; // 초기 선택 Task
+    List<int> taskCounts = List.filled(currentMonthDates.length, 0); // 날짜별 Task 카운트
+    Map<String, int> taskSummary = getTaskSummary(); // Task 요약 데이터 가져오기
+    String selectedTask = taskSummary.isNotEmpty ? taskSummary.keys.first : '';
 
     if (selectedTask.isNotEmpty) {
       QuerySnapshot querySnapshot = await _firestore
-          .collection('tasks') // Firebase 컬렉션 이름
+          .collection('timetables') // Firestore 컬렉션 이름
           .where('date', isGreaterThanOrEqualTo: currentMonthDates.first)
           .where('date', isLessThanOrEqualTo: currentMonthDates.last)
           .get();
 
-      // 날짜별 Task 횟수 집계
+      // Firestore 문서 순회
       for (var doc in querySnapshot.docs) {
-        DateTime date = (doc['date'] as Timestamp).toDate();
-        String task = doc['task'];
-        if (task == selectedTask) {
-          taskCounts[date.day - 1]++;
-        }
+        final data = doc.data() as Map<String, dynamic>;
+        String docDate = doc.id; // 문서 ID는 날짜 (yyyy-MM-dd)
+        DateTime date = DateTime.parse(docDate);
+
+        // Firestore 데이터 구조에 따라 특정 Task 데이터 필터링
+        data.forEach((hour, tasks) {
+          if (tasks is List) {
+            for (var task in tasks) {
+              if (task == selectedTask) {
+                int index = date.day - 1; // 날짜에 해당하는 인덱스
+                taskCounts[index]++; // 해당 날짜의 Task 카운트 증가
+              }
+            }
+          }
+        });
       }
+
+      // 디버깅용 로그 출력
+      print("Updated Task Counts: $taskCounts");
     }
 
-    // 3. FlSpot 데이터 생성
-    List<FlSpot> _generateSpots() {
-      return List.generate(
-        currentMonthDates.length,
-        (index) => FlSpot(index.toDouble(), taskCounts[index].toDouble()),
-      );
-    }
+    // 3. FlSpot 데이터 생성 및 디버깅
+    List<FlSpot> spots = List.generate(
+      currentMonthDates.length,
+          (index) {
+        double x = index.toDouble(); // X 좌표: 날짜 인덱스
+        double y = taskCounts[index].toDouble(); // Y 좌표: 해당 날짜의 작업 횟수
 
-    // 4. 모달 UI
+        // 디버깅용 로그 출력
+        print("FlSpot(x: $x, y: $y)");
+
+        return FlSpot(x, y); // FlSpot 객체 반환
+      },
+    );
+
+    // 디버깅: 전체 FlSpot 데이터 출력
+    print("Generated FlSpots: $spots");
+
+    // 4. 모달 UI 표시
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -232,52 +254,72 @@ class _TimetablePageState extends State<TimetablePage> {
                   const SizedBox(height: 20),
                   Wrap(
                     spacing: 8.0,
-                    children: taskSummary.keys.map((task) {
-                      return ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedTask = task;
-                          });
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: selectedTask == task
-                              ? Colors.white
-                              : Colors.black,
-                        ),
-                        child: Text(
-                          task,
-                          style: TextStyle(
-                            color: selectedTask == task
-                                ? Colors.red
-                                : Colors.black,
+                    runSpacing: 4.0,
+                    children: (() {
+                      List<MapEntry<String, int>> sortedEntries = taskSummary.entries
+                          .where((entry) => entry.value > 0)
+                          .toList();
+
+                      sortedEntries.sort((a, b) => b.value.compareTo(a.value));
+
+                      return sortedEntries.map((entry) {
+                        String task = entry.key;
+                        int count = entry.value;
+
+                        return ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              selectedTask = task;
+                              print("Selected Task: $selectedTask");
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                            selectedTask == task ? Colors.white : Colors.black,
                           ),
-                        ),
-                      );
-                    }).toList(),
+                          child: Text(
+                            "$task ($count)", // Task 이름과 Count 표시
+                            style: TextStyle(
+                              color: selectedTask == task ? Colors.red : Colors.white,
+                            ),
+                          ),
+                        );
+                      }).toList();
+                    })(),
                   ),
                   const SizedBox(height: 20),
                   AspectRatio(
                     aspectRatio: 1.5,
                     child: LineChart(
                       LineChartData(
-                        gridData: FlGridData(show: true),
-                        borderData: FlBorderData(show: true),
+                        gridData: FlGridData(
+                          show: true, // 격자 표시 여부
+                          drawVerticalLine: false, // 수직선 표시 비활성화
+                          drawHorizontalLine: true, // 수평선은 여전히 표시
+                          horizontalInterval: 10, // 수평선 간격 (필요에 따라 조정)
+                        ),
+                        borderData: FlBorderData(show: false),
                         minX: 0,
                         maxX: now.day.toDouble() - 1,
                         minY: 0,
-                        maxY: taskCounts
-                                .reduce((a, b) => a > b ? a : b)
-                                .toDouble() +
+                        maxY: taskCounts.reduce((a, b) => a > b ? a : b).toDouble() +
                             1,
+                        titlesData: FlTitlesData(
+                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 상단 수치 비활성화
+                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 우측 수치 비활성화
+                          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)), // Y축 수치 활성화
+                          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)), // X축 수치 활성화
+                        ),
                         lineBarsData: [
                           LineChartBarData(
-                            spots: _generateSpots(),
+                            spots: spots, // FlSpot 데이터를 그래프에 전달
                             isCurved: true,
                             gradient: LinearGradient(
                               colors: [Colors.red, Colors.white],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
+
                             barWidth: 4,
                             isStrokeCapRound: true,
                             belowBarData: BarAreaData(show: false),
@@ -294,6 +336,9 @@ class _TimetablePageState extends State<TimetablePage> {
       },
     );
   }
+
+
+
 
   void _onPageChanged(int pageIndex) {
     setState(() {
@@ -457,25 +502,57 @@ class _TimetablePageState extends State<TimetablePage> {
                         ),
                       ),
                       // 하단 회색 컨테이너
-                      Expanded(
-                        flex: 3, // 2:8 비율
-                        child: Container(
-                          color: Colors.white, // 회색 배경
-                          alignment: Alignment.bottomRight, // 아래로 정렬
-
-                          child: Container(
-                            width: MediaQuery.of(context).size.width * 0.65,
-                            height: 150,
-                            padding: EdgeInsets.fromLTRB(20, 20, 20, 20),
-                            color: Colors.black12,
-                            child: const Text(
-                              '하단 정렬 컨테이너',
-                              style: TextStyle(
-                                  color: Colors.black87, fontSize: 14),
+              Expanded(
+                flex: 3, // 하단 회색 컨테이너
+                child: Container(
+                  color: Colors.white, // 배경색
+                  alignment: Alignment.bottomRight, // 아래쪽 정렬
+                  child: CustomPaint(
+                    //그림자 넣기 나중에
+                    child: Container(
+                      decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: Colors.black12//회색배경
+                      ),
+                      width: MediaQuery.of(context).size.width * 0.65,
+                      height: 150,
+                      padding: EdgeInsets.fromLTRB(20, 20, 20, 20),
+                      child: LineChart(
+                        LineChartData( // 격자 표시
+                            gridData: FlGridData(//그래프안 점선 싹다 비활
+                              show: false, // 격자 표시 여부
+                              drawVerticalLine: false, // 수직선 표시 비활성화
+                              drawHorizontalLine: false,  // 수평선 간격 (필요에 따라 조정)
                             ),
+                    
+                          borderData: FlBorderData(show: false), // 테두리 표시
+                          titlesData: FlTitlesData(
+                            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 상단 수치 비활성화
+                            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 우측 수치 비활성화
+                            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // Y축 수치 활성화
+                            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)), // X축 수치 활성화
                           ),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: List.generate(101, (x) {
+                                return FlSpot(x.toDouble(), x.toDouble()); // 일차 함수 y = x
+                              }),
+                              isCurved: false, // 직선 그래프
+                              barWidth: 2,  // 선 색상
+                              dotData: FlDotData(show: false), // 점 숨김
+                            ),
+                          ],
+                          minX: 0,
+                          maxX: 100,
+                          minY: 0,
+                          maxY: 100,
                         ),
                       ),
+                    ),
+                  ),
+                ),
+              ),
+
                     ],
                   ),
                 ),
@@ -528,37 +605,43 @@ class _TimetablePageState extends State<TimetablePage> {
                         // 더블탭으로 작업 추가
                         child: Row(
                           children: [
-                            Container(
-                              margin: const EdgeInsets.fromLTRB(10, 0, 0, 0),
-                              width: 60,
-                              child: Text(
-                                hourIndex.toString().padLeft(2, '0'),
-                                style: TextStyle(fontSize: 30),
+                            Expanded(
+                              flex:2,
+                              child: Container(
+
+                                alignment: Alignment.center,
+                                child: Text(
+                                  hourIndex.toString().padLeft(2, '0'),
+                                  style: TextStyle(fontSize: 25),
+                                ),
                               ),
                             ),
-                            Container(
-                              width: 200,
-                              height: 50,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount:
-                                    timetable[dayIndex][hourIndex].length,
-                                itemBuilder: (context, taskIndex) {
-                                  String task =
-                                      timetable[dayIndex][hourIndex][taskIndex];
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 2.0),
-                                    child: TextButton(
-                                      onPressed: () => editTask(context,
-                                          dayIndex, hourIndex, taskIndex),
-                                      child: Text(
-                                        task,
-                                        style: TextStyle(fontSize: 30),
+
+                            Expanded(
+                              flex:7,
+                              child: Container(
+                                height: 50,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount:
+                                      timetable[dayIndex][hourIndex].length,
+                                  itemBuilder: (context, taskIndex) {
+                                    String task =
+                                        timetable[dayIndex][hourIndex][taskIndex];
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 2.0),
+                                      child: TextButton(
+                                        onPressed: () => editTask(context,
+                                            dayIndex, hourIndex, taskIndex),
+                                        child: Text(
+                                          task,
+                                          style: TextStyle(fontSize: 25),
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                           ],
