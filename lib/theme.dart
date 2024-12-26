@@ -42,5 +42,11 @@ ThemeData appTheme() {
 }
 
 //그림자 넣기(나중에 추가  ㄱㄱ)
-
+/*boxShadow: [
+BoxShadow(
+color: Colors.black12,
+blurRadius: 5,
+offset: const Offset(0, 2),
+),
+]*/
 

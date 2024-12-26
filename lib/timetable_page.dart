@@ -1,8 +1,12 @@
+import 'dart:math';
+
 import 'package:climb_leaf2/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'calendar_page.dart';
 import 'package:fl_chart/fl_chart.dart';
+
+import 'graph_page.dart';
 
 class TimetablePage extends StatefulWidget {
   const TimetablePage({super.key});
@@ -175,167 +179,7 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  void showSummaryModal(BuildContext context) async {
-    // 1. 한 달의 날짜를 생성
-    DateTime now = DateTime.now();
-    List<DateTime> currentMonthDates = List.generate(
-      now.day,
-          (index) => DateTime(now.year, now.month, 1).add(Duration(days: index)),
-    );
 
-    // 2. Firestore에서 데이터를 가져오기
-    List<int> taskCounts = List.filled(currentMonthDates.length, 0); // 날짜별 Task 카운트
-    Map<String, int> taskSummary = getTaskSummary(); // Task 요약 데이터 가져오기
-    String selectedTask = taskSummary.isNotEmpty ? taskSummary.keys.first : '';
-
-    if (selectedTask.isNotEmpty) {
-      QuerySnapshot querySnapshot = await _firestore
-          .collection('timetables') // Firestore 컬렉션 이름
-          .where('date', isGreaterThanOrEqualTo: currentMonthDates.first)
-          .where('date', isLessThanOrEqualTo: currentMonthDates.last)
-          .get();
-
-      // Firestore 문서 순회
-      for (var doc in querySnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        String docDate = doc.id; // 문서 ID는 날짜 (yyyy-MM-dd)
-        DateTime date = DateTime.parse(docDate);
-
-        // Firestore 데이터 구조에 따라 특정 Task 데이터 필터링
-        data.forEach((hour, tasks) {
-          if (tasks is List) {
-            for (var task in tasks) {
-              if (task == selectedTask) {
-                int index = date.day - 1; // 날짜에 해당하는 인덱스
-                taskCounts[index]++; // 해당 날짜의 Task 카운트 증가
-              }
-            }
-          }
-        });
-      }
-
-      // 디버깅용 로그 출력
-      print("Updated Task Counts: $taskCounts");
-    }
-
-    // 3. FlSpot 데이터 생성 및 디버깅
-    List<FlSpot> spots = List.generate(
-      currentMonthDates.length,
-          (index) {
-        double x = index.toDouble(); // X 좌표: 날짜 인덱스
-        double y = taskCounts[index].toDouble(); // Y 좌표: 해당 날짜의 작업 횟수
-
-        // 디버깅용 로그 출력
-        print("FlSpot(x: $x, y: $y)");
-
-        return FlSpot(x, y); // FlSpot 객체 반환
-      },
-    );
-
-    // 디버깅: 전체 FlSpot 데이터 출력
-    print("Generated FlSpots: $spots");
-
-    // 4. 모달 UI 표시
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.8,
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  const Text(
-                    'Monthly Task Graph',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 8.0,
-                    runSpacing: 4.0,
-                    children: (() {
-                      List<MapEntry<String, int>> sortedEntries = taskSummary.entries
-                          .where((entry) => entry.value > 0)
-                          .toList();
-
-                      sortedEntries.sort((a, b) => b.value.compareTo(a.value));
-
-                      return sortedEntries.map((entry) {
-                        String task = entry.key;
-                        int count = entry.value;
-
-                        return ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              selectedTask = task;
-                              print("Selected Task: $selectedTask");
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                            selectedTask == task ? Colors.white : Colors.black,
-                          ),
-                          child: Text(
-                            "$task ($count)", // Task 이름과 Count 표시
-                            style: TextStyle(
-                              color: selectedTask == task ? Colors.red : Colors.white,
-                            ),
-                          ),
-                        );
-                      }).toList();
-                    })(),
-                  ),
-                  const SizedBox(height: 20),
-                  AspectRatio(
-                    aspectRatio: 1.5,
-                    child: LineChart(
-                      LineChartData(
-                        gridData: FlGridData(
-                          show: true, // 격자 표시 여부
-                          drawVerticalLine: false, // 수직선 표시 비활성화
-                          drawHorizontalLine: true, // 수평선은 여전히 표시
-                          horizontalInterval: 10, // 수평선 간격 (필요에 따라 조정)
-                        ),
-                        borderData: FlBorderData(show: false),
-                        minX: 0,
-                        maxX: now.day.toDouble() - 1,
-                        minY: 0,
-                        maxY: taskCounts.reduce((a, b) => a > b ? a : b).toDouble() +
-                            1,
-                        titlesData: FlTitlesData(
-                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 상단 수치 비활성화
-                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 우측 수치 비활성화
-                          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)), // Y축 수치 활성화
-                          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)), // X축 수치 활성화
-                        ),
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: spots, // FlSpot 데이터를 그래프에 전달
-                            isCurved: true,
-                            gradient: LinearGradient(
-                              colors: [Colors.red, Colors.white],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-
-                            barWidth: 4,
-                            isStrokeCapRound: true,
-                            belowBarData: BarAreaData(show: false),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
 
 
@@ -565,11 +409,11 @@ class _TimetablePageState extends State<TimetablePage> {
                       IconButton(
                         icon: const Icon(Icons.bar_chart),
                         onPressed: () {
-                          Map<DateTime, Map<String, int>> wrappedTaskData =
-                              taskData.map((date, count) {
-                            return MapEntry(date, {'defaultTask': count});
-                          });
-                          showSummaryModal(context);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) =>  GraphPage(selectedDates: selectedDates,currentDay:currentDay), // GraphPage로 이동
+                            ),
+                          );
                         },
                       ),
                       IconButton(
