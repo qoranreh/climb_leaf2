@@ -42,82 +42,90 @@ class GraphPage extends StatelessWidget {
       ),
       body: Container(//마진용
         
-        margin: EdgeInsets.all(20),
+        margin: EdgeInsets.all(30),
         child: Column(
           children: [
-            Container(//Task와 addIcon
-              height: 20,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [Icon(Icons.add),Text("코딩공부")],
-              )
+            Expanded(
+              flex: 1,
+              child: Container(//Task와 addIcon
+                height: 20,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [Icon(Icons.add),Text("코딩공부")],
+                )
+              ),
             ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(//그래프 그리는 상자
-                decoration: BoxDecoration(
-                    color: Colors.black12,
-                    borderRadius: BorderRadius.circular(16)),
-                width: MediaQuery.of(context).size.width * 0.8,
-                height: MediaQuery.of(context).size.height * 0.42,//그래프 상자 높이
-                // 그래프 크기
-                padding: const EdgeInsets.all(30),
-                child: LineChart(
-                  LineChartData(
-                    // 격자 표시 비활성화
-                    gridData: FlGridData(
-                      show: false, // 격자 표시 여부
-                      drawVerticalLine: false, // 수직선 표시 비활성화
-                      drawHorizontalLine: false, // 수평선 표시 비활성화
-                    ),
-                    borderData: FlBorderData(show: false),
-                    // 테두리 숨김
-                    titlesData: FlTitlesData(
-                      topTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false), // 상단 수치 비활성화
+            Expanded(
+              flex: 7,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(//그래프 그리는 상자
+                  decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(20)),
+                  width: MediaQuery.of(context).size.width * 0.8,
+                  height: MediaQuery.of(context).size.height * 0.42,//그래프 상자 높이
+                  // 그래프 크기
+                  padding: const EdgeInsets.all(30),
+                  child: LineChart(
+                    LineChartData(
+
+                      // 격자 표시 비활성화
+                      gridData: FlGridData(
+                        show: false, // 격자 표시 여부
+                        drawVerticalLine: false, // 수직선 표시 비활성화
+                        drawHorizontalLine: false, // 수평선 표시 비활성화
                       ),
-                      rightTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false), // 우측 수치 비활성화
-                      ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false), // Y축 수치 비활성화
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: true), // X축 수치 활성화
-                      ),
-                    ),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: List.generate(
-                          101,
-                          (x) {
-                            double xValue = x.toDouble(); // x 값을 실수형으로 변환
-                            double yValue =
-                                100 / (1 + pow(2, 7 - 0.15 * xValue)); // y 계산
-                            return FlSpot(xValue, yValue); // x와 y 값으로 FlSpot 생성
-                          },
+                      borderData: FlBorderData(show: false),
+                      // 테두리 숨김
+                      titlesData: FlTitlesData(
+                        topTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false), // 상단 수치 비활성화
                         ),
-                        isCurved: false, // 직선 그래프
-                        barWidth: 2, // 선 두께
-                        dotData: FlDotData(
-                          show: true,
-                          checkToShowDot: (spot, barData) {
-                            return spot.x == 1; // x = 1에서만 점 표시
-                          },
-                        ), // 점 숨김
+                        rightTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false), // 우측 수치 비활성화
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false), // Y축 수치 비활성화
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: true), // X축 수치 활성화
+                        ),
                       ),
-                    ],
-                    minX: 0,
-                    maxX: 100,
-                    minY: 0,
-                    maxY: 100,
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: List.generate(
+                            101,
+                            (x) {
+                              double xValue = x.toDouble(); // x 값을 실수형으로 변환
+                              double yValue =
+                                  100 / (1 + pow(2, 7 - 0.15 * xValue)); // y 계산
+                              return FlSpot(xValue, yValue); // x와 y 값으로 FlSpot 생성
+                            },
+                          ),color: Colors.black,
+                          isCurved: false, // 직선 그래프
+                          barWidth: 2, // 선 두께
+                          dotData: FlDotData(
+                            show: true,
+                            checkToShowDot: (spot, barData) {
+                              return spot.x == 1; // x = 1에서만 점 표시
+                            },
+                          ), // 점 숨김
+                        ),
+                      ],
+                      minX: 0,
+                      maxX: 100,
+                      minY: 0,
+                      maxY: 100,
+                    ),
                   ),
                 ),
               ),
             ),
-            Container(
-              height: MediaQuery.of(context).size.height * 0.2,
-              child: Expanded(
+            Expanded(
+              flex: 4,
+              child: Container(
+                padding: EdgeInsets.fromLTRB(0, 7, 0, 0),
                 child: ListView.builder(
                   itemCount: items.length, // 항목 수
                   itemBuilder: (context, index) {
@@ -134,7 +142,7 @@ class GraphPage extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                                 color: Colors.black12,
-                                borderRadius: BorderRadius.circular(16)),
+                                borderRadius: BorderRadius.circular(20)),
                           ),
                           const SizedBox(width: 20), //가로 사이 공간
                           Text(
@@ -151,11 +159,14 @@ class GraphPage extends StatelessWidget {
                 ),
               ),
             ),
-            Container(
-              padding: EdgeInsets.fromLTRB(0, 50, 0, 0),
-              child: const Text(
-                "Recent activities : 코딩공부 | 운동하기 | 다이어트",
-                style: TextStyle(fontSize: 10),
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: EdgeInsets.fromLTRB(0, 0, 0, 0),
+                child: const Text(
+                  "Recent activities : 코딩공부 | 운동하기 | 다이어트",
+                  style: TextStyle(fontSize: 10),
+                ),
               ),
             ),
           ],

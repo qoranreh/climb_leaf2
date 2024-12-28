@@ -20,6 +20,10 @@ class _TimetablePageState extends State<TimetablePage> {
   final List<String> days = ['월', '화', '수', '목', '금', '토', '일']; // 요일
   late final PageController pageController;
 
+  final ScrollController hourScrollController = ScrollController(); // 시간별 스크롤 컨트롤러
+  int currentHour = DateTime.now().hour; // 현재 시간
+
+
   List<List<List<String>>> timetable =
       List.generate(7, (index) => List.generate(24, (i) => [])); // 일주일 데이터 저장
 
@@ -69,6 +73,14 @@ class _TimetablePageState extends State<TimetablePage> {
         initialPage: selectedDates.weekday - 1); // 현재 요일에 맞는 페이지로 초기화
     currentWeekKey = _getWeekKey(selectedDates); // 주 키 계산
     _loadWeekData(); // 현재 주 데이터 Firestore에서 로드
+
+    WidgetsBinding.instance.addPostFrameCallback((_){
+      hourScrollController.jumpTo(currentHour*50.0);//시간당 100픽셀 간격 (화면조정)
+    });
+
+    hourScrollController.addListener(() {
+      print("Current Scroll Offset: ${hourScrollController.offset}");
+    });
   }
 
   @override
@@ -383,7 +395,8 @@ class _TimetablePageState extends State<TimetablePage> {
                               }),
                               isCurved: false, // 직선 그래프
                               barWidth: 2,  // 선 색상
-                              dotData: FlDotData(show: false), // 점 숨김
+                              dotData: FlDotData(show: false),
+                                color: Colors.black // 점 숨김
                             ),
                           ],
                           minX: 0,
@@ -442,8 +455,10 @@ class _TimetablePageState extends State<TimetablePage> {
                 // 페이지 변경 이벤트 처리
                 itemBuilder: (context, dayIndex) {
                   return ListView.builder(
+                    controller: dayIndex==selectedDates.weekday-1?hourScrollController:null,
                     itemCount: hoursInDay,
                     itemBuilder: (context, hourIndex) {
+                      bool isCurrentHour = hourIndex == currentHour;
                       return GestureDetector(
                         onDoubleTap: () => addTask(dayIndex, hourIndex),
                         // 더블탭으로 작업 추가
@@ -452,6 +467,7 @@ class _TimetablePageState extends State<TimetablePage> {
                             Expanded(
                               flex:2,
                               child: Container(
+                                color: isCurrentHour ? Colors.red.withOpacity(0.2) : Colors.transparent,
 
                                 alignment: Alignment.center,
                                 child: Text(
