@@ -1,116 +1,121 @@
-import 'dart:math'; // pow 함수 사용을 위한 import
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class GraphPage extends StatelessWidget {
-  const GraphPage({super.key, this.selectedDates, this.currentDay});
+  const GraphPage({
+    super.key,
+    required this.selectedDates,
+    required this.currentDay,
+    required this.taskSummary,
+  });
 
-  final selectedDates;
-  final currentDay;
+  final DateTime selectedDates;
+  final String currentDay;
+  final Map<String, int> taskSummary; // Task Summary 데이터를 받아옴
 
   @override
   Widget build(BuildContext context) {
-    //예제데이터
-    final List<Map<String, dynamic>> items = [
-      {"image": Icons.code, "title": "코딩 공부"},
-      {"image": Icons.fitness_center, "title": "운동하기"},
-      {"image": Icons.local_dining, "title": "다이어트"},
-      {"image": Icons.book, "title": "독서하기"},
-    ];
+    void _showTaskGoalModal() {
+      showDialog(
+        context: context,
+        builder: (context) => TaskGoalModal(taskSummary: taskSummary),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         leadingWidth: 100.0,
         leading: Padding(
-            padding: const EdgeInsets.only(left: 8.0),
-            child: Center(
-              child: Text(
-                '${selectedDates.year % 100}-${selectedDates.month.toString().padLeft(2, '0')}-${selectedDates.day.toString().padLeft(2, '0')}', // YY-MM-DD 형식
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+          padding: const EdgeInsets.only(left: 8.0),
+          child: Center(
+            child: Text(
+              '${selectedDates.year % 100}-${selectedDates.month.toString().padLeft(2, '0')}-${selectedDates.day.toString().padLeft(2, '0')}',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
-            )),
+            ),
+          ),
+        ),
         centerTitle: true,
         actions: [
           Text(currentDay, style: const TextStyle(fontSize: 20)),
-          SizedBox(
-            width: 30,
-          )
+          const SizedBox(width: 30),
         ],
       ),
-      body: Container(//마진용
-        
-        margin: EdgeInsets.all(30),
+      body: Container(
+        margin: const EdgeInsets.all(30),
         child: Column(
           children: [
             Expanded(
               flex: 1,
-              child: Container(//Task와 addIcon
-                height: 20,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [Icon(Icons.add),Text("코딩공부")],
-                )
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _showTaskGoalModal,
+                  ),
+                  const Text("코딩 공부"),
+                ],
               ),
             ),
             Expanded(
               flex: 7,
               child: Align(
                 alignment: Alignment.bottomCenter,
-                child: Container(//그래프 그리는 상자
+                child: Container(
                   decoration: BoxDecoration(
-                      color: Colors.black12,
-                      borderRadius: BorderRadius.circular(20)),
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   width: MediaQuery.of(context).size.width * 0.8,
-                  height: MediaQuery.of(context).size.height * 0.42,//그래프 상자 높이
-                  // 그래프 크기
+                  height: MediaQuery.of(context).size.height * 0.42,
                   padding: const EdgeInsets.all(30),
                   child: LineChart(
                     LineChartData(
-
-                      // 격자 표시 비활성화
                       gridData: FlGridData(
-                        show: false, // 격자 표시 여부
-                        drawVerticalLine: false, // 수직선 표시 비활성화
-                        drawHorizontalLine: false, // 수평선 표시 비활성화
+                        show: false,
+                        drawVerticalLine: false,
+                        drawHorizontalLine: false,
                       ),
                       borderData: FlBorderData(show: false),
-                      // 테두리 숨김
                       titlesData: FlTitlesData(
                         topTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false), // 상단 수치 비활성화
+                          sideTitles: SideTitles(showTitles: false),
                         ),
                         rightTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false), // 우측 수치 비활성화
+                          sideTitles: SideTitles(showTitles: false),
                         ),
                         leftTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false), // Y축 수치 비활성화
+                          sideTitles: SideTitles(showTitles: false),
                         ),
                         bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: true), // X축 수치 활성화
+                          sideTitles: SideTitles(showTitles: true),
                         ),
                       ),
                       lineBarsData: [
                         LineChartBarData(
                           spots: List.generate(
                             101,
-                            (x) {
-                              double xValue = x.toDouble(); // x 값을 실수형으로 변환
+                                (x) {
+                              double xValue = x.toDouble();
                               double yValue =
-                                  100 / (1 + pow(2, 7 - 0.15 * xValue)); // y 계산
-                              return FlSpot(xValue, yValue); // x와 y 값으로 FlSpot 생성
+                                  100 / (1 + pow(2, 7 - 0.15 * xValue));
+                              return FlSpot(xValue, yValue);
                             },
-                          ),color: Colors.black,
-                          isCurved: false, // 직선 그래프
-                          barWidth: 2, // 선 두께
+                          ),
+                          color: Colors.black,
+                          isCurved: false,
+                          barWidth: 2,
                           dotData: FlDotData(
                             show: true,
                             checkToShowDot: (spot, barData) {
-                              return spot.x == 1; // x = 1에서만 점 표시
+                              return spot.x == 1;
                             },
-                          ), // 점 숨김
+                          ),
                         ),
                       ],
                       minX: 0,
@@ -125,30 +130,26 @@ class GraphPage extends StatelessWidget {
             Expanded(
               flex: 4,
               child: Container(
-                padding: EdgeInsets.fromLTRB(0, 7, 0, 0),
+                padding: const EdgeInsets.fromLTRB(0, 7, 0, 0),
                 child: ListView.builder(
-                  itemCount: items.length, // 항목 수
+                  itemCount: taskSummary.length,
                   itemBuilder: (context, index) {
+                    final task = taskSummary.entries.elementAt(index);
                     return Container(
                       margin: const EdgeInsets.symmetric(vertical: 16.0),
                       padding: const EdgeInsets.all(5),
                       child: Row(
                         children: [
-                          Container(
-                            child: Icon(
-                              items[index]["image"], // 아이콘
-                              size: 100,
-                              color: Colors.blueAccent,
-                            ),
-                            decoration: BoxDecoration(
-                                color: Colors.black12,
-                                borderRadius: BorderRadius.circular(20)),
+                          Icon(
+                            Icons.task_alt,
+                            size: 100,
+                            color: Colors.blueAccent,
                           ),
-                          const SizedBox(width: 20), //가로 사이 공간
+                          const SizedBox(width: 20),
                           Text(
-                            items[index]["title"], // 제목?
+                            "${task.key} (${task.value})",
                             style: const TextStyle(
-                              fontSize: 10,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -159,15 +160,110 @@ class GraphPage extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(
-              flex: 1,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(0, 0, 0, 0),
-                child: const Text(
-                  "Recent activities : 코딩공부 | 운동하기 | 다이어트",
-                  style: TextStyle(fontSize: 10),
-                ),
-              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class TaskGoalModal extends StatefulWidget {
+  const TaskGoalModal({super.key, required this.taskSummary});
+
+  final Map<String, int> taskSummary;
+
+  @override
+  State<TaskGoalModal> createState() => _TaskGoalModalState();
+}
+
+class _TaskGoalModalState extends State<TaskGoalModal> {
+  String selectedTask = "";
+  int selectedGraph = -1;
+  int selectedRatio = -1;
+
+  void saveToFirestore() async {
+    if (selectedTask.isNotEmpty && selectedGraph != -1 && selectedRatio != -1) {
+      final taskGoalRef = FirebaseFirestore.instance.collection('taskGoal');
+      await taskGoalRef.add({
+        "task": selectedTask,
+        "ratio": selectedRatio,
+        "graph": selectedGraph,
+        "comments": List.generate(4, (index) => ""),
+        "images": List.generate(4, (index) => ""),
+      });
+      Navigator.of(context).pop();
+    } else {
+      print("Please select all options");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Select Task",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ...widget.taskSummary.entries
+                .where((entry) => entry.value > 0)
+                .map((entry) {
+              return ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    selectedTask = entry.key;
+                  });
+                },
+                child: Text(entry.key),
+              );
+            }).toList(),
+            const Divider(),
+            const Text("Select Graph"),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(3, (i) {
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      selectedGraph = i;
+                    });
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.all(8.0),
+                    child: Icon(
+                      Icons.bar_chart,
+                      color: selectedGraph == i ? Colors.blue : Colors.black,
+                      size: 40,
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const Divider(),
+            const Text("Select Ratio"),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [100, 200, 400, 1000].map((ratio) {
+                return ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      selectedRatio = ratio;
+                    });
+                  },
+                  child: Text(ratio.toString()),
+                );
+              }).toList(),
+            ),
+            ElevatedButton(
+              onPressed: saveToFirestore,
+              child: const Text("OK"),
             ),
           ],
         ),

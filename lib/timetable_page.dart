@@ -424,7 +424,11 @@ class _TimetablePageState extends State<TimetablePage> {
                         onPressed: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) =>  GraphPage(selectedDates: selectedDates,currentDay:currentDay), // GraphPage로 이동
+                              builder: (context) => GraphPage(
+                                selectedDates: selectedDates,
+                                currentDay: currentDay,
+                                taskSummary: getTaskSummary(), // taskSummary 전달
+                              ),
                             ),
                           );
                         },
