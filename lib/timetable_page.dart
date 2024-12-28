@@ -298,7 +298,12 @@ class _TimetablePageState extends State<TimetablePage> {
       _initializeEmptyTimetable(); // 에러 발생 시 기본값 설정
     }
   }
-
+  void _reloadPage() {
+    setState(() {
+      // 필요한 데이터를 다시 로드하거나 UI 업데이트 수행
+      print("Reload triggered from GraphPage!");
+    });
+  }
   // 빈 데이터 초기화 함수
   void _initializeEmptyTimetable() {
     setState(() {
@@ -427,7 +432,8 @@ class _TimetablePageState extends State<TimetablePage> {
                               builder: (context) => GraphPage(
                                 selectedDates: selectedDates,
                                 currentDay: currentDay,
-                                taskSummary: getTaskSummary(), // taskSummary 전달
+                                taskSummary: getTaskSummary(),// taskSummary 전달
+                                onTaskAdded: _reloadPage,
                               ),
                             ),
                           );

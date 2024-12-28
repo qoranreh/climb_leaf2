@@ -3,27 +3,114 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
-class GraphPage extends StatelessWidget {
+class GraphPage extends StatefulWidget {
   const GraphPage({
     super.key,
     required this.selectedDates,
     required this.currentDay,
     required this.taskSummary,
+    required this.onTaskAdded,
   });
 
   final DateTime selectedDates;
   final String currentDay;
-  final Map<String, int> taskSummary; // Task Summary 데이터를 받아옴
+  final Map<String, int> taskSummary;
+  final VoidCallback onTaskAdded;
+
+  @override
+  State<GraphPage> createState() => _GraphPageState();
+}
+
+class _GraphPageState extends State<GraphPage> {
+  List<Map<String, dynamic>> taskGoals = [];
+  int currentPageIndex = 0;
+  String selectedTask = "-";
+
+  @override
+  void initState() {
+    super.initState();
+    selectedTask = "-";
+    _loadTaskGoals();
+  }
+
+  Future<void> _loadTaskGoals() async {
+    final taskGoalRef = FirebaseFirestore.instance.collection('taskGoal');
+    final snapshot = await taskGoalRef.get();
+    setState(() {
+      taskGoals = snapshot.docs.map((doc) => doc.data()).toList();
+    });
+  }
+
+  void _reloadPage() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GraphPage(
+          selectedDates: widget.selectedDates,
+          currentDay: widget.currentDay,
+          taskSummary: widget.taskSummary,
+          onTaskAdded: _reloadPage,
+        ),
+      ),
+    );
+  }
+
+  void _showTaskGoalModal() {
+    showDialog(
+      context: context,
+      builder: (context) => TaskGoalModal(
+        taskSummary: widget.taskSummary,
+        existingTasks: taskGoals.map((goal) => goal['task'] as String).toSet(),
+        onTaskSelected: (task) {
+          setState(() {
+            selectedTask = task;
+          });
+        },
+        onTaskAdded: _reloadPage,
+      ),
+    );
+  }
+
+  // 그래프 계산 함수
+  FlSpot calculateGraphSpot(int graphType, int x) {
+    double xValue = x.toDouble();
+    double yValue;
+
+    if (graphType == 0) {
+      yValue = 100 / (1 + pow(2, 5 - 0.1 * xValue));
+    } else if (graphType == 1) {
+      yValue = xValue;
+    } else if (graphType == 2) {
+      yValue = 0.01 * pow(xValue, 2);
+    } else {
+      yValue = 0.0;
+    }
+
+    return FlSpot(xValue, yValue);
+  }
+
+  // x 값 계산 함수 (그래프 위 점)
+  double calculateXForDot(int taskValue, int ratio) {
+    if (ratio == 0) return 0;
+    return taskValue / (ratio / 100);
+  }
+
+  // 페이지 데이터 업데이트
+  void _updatePageData(int index) {
+    if (taskGoals.isNotEmpty && index < taskGoals.length) {
+      final taskGoal = taskGoals[index];
+      setState(() {
+        selectedTask = taskGoal['task'] ?? "-";
+      });
+    } else {
+      setState(() {
+        selectedTask = "-";
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    void _showTaskGoalModal() {
-      showDialog(
-        context: context,
-        builder: (context) => TaskGoalModal(taskSummary: taskSummary),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         leadingWidth: 100.0,
@@ -31,7 +118,7 @@ class GraphPage extends StatelessWidget {
           padding: const EdgeInsets.only(left: 8.0),
           child: Center(
             child: Text(
-              '${selectedDates.year % 100}-${selectedDates.month.toString().padLeft(2, '0')}-${selectedDates.day.toString().padLeft(2, '0')}',
+              '${widget.selectedDates.year % 100}-${widget.selectedDates.month.toString().padLeft(2, '0')}-${widget.selectedDates.day.toString().padLeft(2, '0')}',
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -41,16 +128,17 @@ class GraphPage extends StatelessWidget {
         ),
         centerTitle: true,
         actions: [
-          Text(currentDay, style: const TextStyle(fontSize: 20)),
+          Text(widget.currentDay, style: const TextStyle(fontSize: 20)),
           const SizedBox(width: 30),
         ],
       ),
       body: Container(
-        margin: const EdgeInsets.all(30),
+        margin: const EdgeInsets.all(20),
         child: Column(
           children: [
-            Expanded(
-              flex: 1,
+            // Task 및 추가 버튼
+            Container(
+              height: 50,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -58,106 +146,137 @@ class GraphPage extends StatelessWidget {
                     icon: const Icon(Icons.add),
                     onPressed: _showTaskGoalModal,
                   ),
-                  const Text("코딩 공부"),
+                  Text(
+                    selectedTask == "-" || !widget.taskSummary.containsKey(selectedTask)
+                        ? selectedTask
+                        : "$selectedTask : ${widget.taskSummary[selectedTask]}",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+
+
+
                 ],
               ),
             ),
+            // 그래프 표시
             Expanded(
-              flex: 7,
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black12,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  width: MediaQuery.of(context).size.width * 0.8,
-                  height: MediaQuery.of(context).size.height * 0.42,
-                  padding: const EdgeInsets.all(30),
-                  child: LineChart(
-                    LineChartData(
-                      gridData: FlGridData(
-                        show: false,
-                        drawVerticalLine: false,
-                        drawHorizontalLine: false,
-                      ),
-                      borderData: FlBorderData(show: false),
-                      titlesData: FlTitlesData(
-                        topTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        rightTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: true),
-                        ),
-                      ),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: List.generate(
-                            101,
-                                (x) {
-                              double xValue = x.toDouble();
-                              double yValue =
-                                  100 / (1 + pow(2, 7 - 0.15 * xValue));
-                              return FlSpot(xValue, yValue);
-                            },
-                          ),
-                          color: Colors.black,
-                          isCurved: false,
-                          barWidth: 2,
-                          dotData: FlDotData(
-                            show: true,
-                            checkToShowDot: (spot, barData) {
-                              return spot.x == 1;
-                            },
-                          ),
-                        ),
-                      ],
-                      minX: 0,
-                      maxX: 100,
-                      minY: 0,
-                      maxY: 100,
+              flex: 3,
+              child: PageView.builder(
+                itemCount: taskGoals.isNotEmpty ? taskGoals.length : 1,
+                onPageChanged: (index) {
+                  setState(() {
+                    currentPageIndex = index;
+                  });
+                  _updatePageData(index);
+                },
+                itemBuilder: (context, index) {
+                  if (taskGoals.isEmpty) {
+                    return const Center(child: Text("No goals added."));
+                  }
+                  final taskGoal = taskGoals[index];
+                  final graphType = taskGoal['graph'] ?? 0;
+                  final ratio = taskGoal['ratio'] ?? 100;
+
+                  // x 값 계산 (점 표시용)
+                  double dotX = calculateXForDot(
+                    widget.taskSummary[selectedTask] ?? 0,
+                    ratio,
+                  );
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  ),
-                ),
+                    padding: const EdgeInsets.all(30),
+                    child: LineChart(
+                      LineChartData(
+                        gridData: FlGridData(
+                          show: false,
+                          drawVerticalLine: false,
+                          drawHorizontalLine: false,
+                        ),
+                        borderData: FlBorderData(show: false),
+                        titlesData: FlTitlesData(
+                          topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: true),
+                          ),
+                        ),
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: List.generate(
+                              101,
+                                  (x) => calculateGraphSpot(graphType, x),
+                            ),
+                            color: Colors.black,
+                            isCurved: false,
+                            barWidth: 2,
+                            dotData: FlDotData(
+                              show: true,
+                              checkToShowDot: (spot, barData) {
+                                return spot.x == dotX;
+                              },
+                            ),
+                          ),
+                        ],
+                        minX: 0,
+                        maxX: 100,
+                        minY: 0,
+                        maxY: 100,
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
+            // ListViewBuilder
             Expanded(
               flex: 4,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(0, 7, 0, 0),
-                child: ListView.builder(
-                  itemCount: taskSummary.length,
-                  itemBuilder: (context, index) {
-                    final task = taskSummary.entries.elementAt(index);
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 16.0),
-                      padding: const EdgeInsets.all(5),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.task_alt,
-                            size: 100,
-                            color: Colors.blueAccent,
-                          ),
-                          const SizedBox(width: 20),
-                          Text(
-                            "${task.key} (${task.value})",
+              child: ListView.builder(
+                itemCount: taskGoals.isNotEmpty ? taskGoals.length : 1,
+                itemBuilder: (context, index) {
+                  if (taskGoals.isEmpty) {
+                    return const Center(child: Text("Please add Comment"));
+                  }
+                  final taskGoal = taskGoals[index];
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 16.0),
+                    padding: const EdgeInsets.all(5),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.image,
+                          size: 40,
+                          color: Colors.blueAccent,
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Text(
+                            taskGoal['comments'][index] != ""
+                                ? taskGoal['comments'][index]
+                                : "Please add Comment",
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -168,9 +287,18 @@ class GraphPage extends StatelessWidget {
 }
 
 class TaskGoalModal extends StatefulWidget {
-  const TaskGoalModal({super.key, required this.taskSummary});
+  const TaskGoalModal({
+    super.key,
+    required this.taskSummary,
+    required this.existingTasks,
+    required this.onTaskSelected,
+    required this.onTaskAdded,
+  });
 
   final Map<String, int> taskSummary;
+  final Set<String> existingTasks;
+  final ValueChanged<String> onTaskSelected;
+  final VoidCallback onTaskAdded;
 
   @override
   State<TaskGoalModal> createState() => _TaskGoalModalState();
@@ -180,9 +308,14 @@ class _TaskGoalModalState extends State<TaskGoalModal> {
   String selectedTask = "";
   int selectedGraph = -1;
   int selectedRatio = -1;
+  bool hasDuplicateTask = false;
 
   void saveToFirestore() async {
-    if (selectedTask.isNotEmpty && selectedGraph != -1 && selectedRatio != -1) {
+    if (widget.existingTasks.contains(selectedTask)) {
+      setState(() {
+        hasDuplicateTask = true;
+      });
+    } else if (selectedTask.isNotEmpty && selectedGraph != -1 && selectedRatio != -1) {
       final taskGoalRef = FirebaseFirestore.instance.collection('taskGoal');
       await taskGoalRef.add({
         "task": selectedTask,
@@ -191,6 +324,8 @@ class _TaskGoalModalState extends State<TaskGoalModal> {
         "comments": List.generate(4, (index) => ""),
         "images": List.generate(4, (index) => ""),
       });
+      widget.onTaskSelected(selectedTask);
+      widget.onTaskAdded();
       Navigator.of(context).pop();
     } else {
       print("Please select all options");
@@ -202,70 +337,94 @@ class _TaskGoalModalState extends State<TaskGoalModal> {
     return Dialog(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "Select Task",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ...widget.taskSummary.entries
-                .where((entry) => entry.value > 0)
-                .map((entry) {
-              return ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    selectedTask = entry.key;
-                  });
-                },
-                child: Text(entry.key),
-              );
-            }).toList(),
-            const Divider(),
-            const Text("Select Graph"),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(3, (i) {
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      selectedGraph = i;
-                    });
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.all(8.0),
-                    child: Icon(
-                      Icons.bar_chart,
-                      color: selectedGraph == i ? Colors.blue : Colors.black,
-                      size: 40,
-                    ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Add New Goal",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text("Select Task"),
+              Container(
+                height: 150,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: widget.taskSummary.entries
+                        .where((entry) => entry.value > 0)
+                        .map((entry) {
+                      return ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            selectedTask = entry.key;
+                            hasDuplicateTask = false;
+                          });
+                        },
+                        child: Text(entry.key),
+                      );
+                    }).toList(),
                   ),
-                );
-              }),
-            ),
-            const Divider(),
-            const Text("Select Ratio"),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [100, 200, 400, 1000].map((ratio) {
-                return ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      selectedRatio = ratio;
-                    });
-                  },
-                  child: Text(ratio.toString()),
-                );
-              }).toList(),
-            ),
-            ElevatedButton(
-              onPressed: saveToFirestore,
-              child: const Text("OK"),
-            ),
-          ],
+                ),
+              ),
+              const Divider(),
+              const Text("Select Graph"),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8.0,
+                runSpacing: 8.0,
+                alignment: WrapAlignment.center,
+                children: List.generate(3, (i) {
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        selectedGraph = i;
+                        hasDuplicateTask = false;
+                      });
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.all(8.0),
+                      child: Icon(
+                        Icons.bar_chart,
+                        color: selectedGraph == i ? Colors.blue : Colors.black,
+                        size: 40,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const Divider(),
+              const Text("Select Ratio"),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [100, 200, 400, 1000].map((ratio) {
+                  return ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        selectedRatio = ratio;
+                        hasDuplicateTask = false;
+                      });
+                    },
+                    child: Text(ratio.toString()),
+                  );
+                }).toList(),
+              ),
+              if (hasDuplicateTask)
+                const Text(
+                  "Task already exists!",
+                  style: TextStyle(color: Colors.red, fontSize: 14),
+                ),
+              ElevatedButton(
+                onPressed: saveToFirestore,
+                style: ButtonStyle(
+                  backgroundColor: MaterialStateProperty.all(
+                      hasDuplicateTask ? Colors.red : Colors.blue),
+                ),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
         ),
       ),
     );
