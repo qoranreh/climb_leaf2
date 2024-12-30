@@ -37,7 +37,13 @@ class _GraphPageState extends State<GraphPage> {
     final taskGoalRef = FirebaseFirestore.instance.collection('taskGoal');
     final snapshot = await taskGoalRef.get();
     setState(() {
-      taskGoals = snapshot.docs.map((doc) => doc.data()).toList();
+      taskGoals = snapshot.docs.map((doc) {
+        final data = doc.data(); // Firestore 문서 데이터
+        return {
+          ...data, // 기존 데이터 포함
+          'id': doc.id, // 문서 ID 추가
+        };
+      }).toList();
     });
   }
 
@@ -109,6 +115,9 @@ class _GraphPageState extends State<GraphPage> {
     }
   }
 
+
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -147,7 +156,8 @@ class _GraphPageState extends State<GraphPage> {
                     onPressed: _showTaskGoalModal,
                   ),
                   Text(
-                    selectedTask == "-" || !widget.taskSummary.containsKey(selectedTask)
+                    selectedTask == "-" ||
+                            !widget.taskSummary.containsKey(selectedTask)
                         ? selectedTask
                         : "$selectedTask : ${widget.taskSummary[selectedTask]}",
                     style: const TextStyle(
@@ -155,9 +165,6 @@ class _GraphPageState extends State<GraphPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   )
-
-
-
                 ],
               ),
             ),
@@ -218,7 +225,7 @@ class _GraphPageState extends State<GraphPage> {
                           LineChartBarData(
                             spots: List.generate(
                               101,
-                                  (x) => calculateGraphSpot(graphType, x),
+                              (x) => calculateGraphSpot(graphType, x),
                             ),
                             color: Colors.black,
                             isCurved: false,
@@ -242,48 +249,121 @@ class _GraphPageState extends State<GraphPage> {
               ),
             ),
             // ListViewBuilder
-            Expanded(
-              flex: 4,
-              child: ListView.builder(
-                itemCount: taskGoals.isNotEmpty ? taskGoals.length : 1,
-                itemBuilder: (context, index) {
-                  if (taskGoals.isEmpty) {
-                    return const Center(child: Text("Please add Comment"));
-                  }
-                  final taskGoal = taskGoals[index];
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 16.0),
-                    padding: const EdgeInsets.all(5),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.image,
-                          size: 40,
-                          color: Colors.blueAccent,
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: Text(
-                            taskGoal['comments'][index] != ""
-                                ? taskGoal['comments'][index]
-                                : "Please add Comment",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
+        Expanded(
+          flex: 4,
+          child: ListView.builder(
+            itemCount: taskGoals.isNotEmpty ? 1 : 0, // 선택된 Task만 표시
+            itemBuilder: (context, index) {
+              if (taskGoals.isEmpty) {
+                return const Center(child: Text("Please add Comment"));
+              }
+              final taskGoal = taskGoals[currentPageIndex]; // 현재 선택된 페이지의 TaskGoal 사용
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 16.0),
+                padding: const EdgeInsets.all(5),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onDoubleTap: () =>
+                          _showImageModal(context, taskGoal['id']), // 이미지 업로드
+                      child: Icon(
+                        Icons.image,
+                        size: 40,
+                        color: Colors.blueAccent,
+                      ),
                     ),
-                  );
-                },
-              ),
-            ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: GestureDetector(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              taskGoal['comments'].length > 0 &&
+                                  taskGoal['comments'][0] != ""
+                                  ? "Expected: ${taskGoal['comments'][0]}"
+                                  : "No Expected Achievement",
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueAccent,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              taskGoal['comments'].length > 1 &&
+                                  taskGoal['comments'][1] != ""
+                                  ? "Comment: ${taskGoal['comments'][1]}"
+                                  : "No Comment",
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
           ],
         ),
       ),
     );
   }
+}
+
+void _showImageModal(BuildContext context, String taskId) {
+  showDialog(
+    context: context,
+    builder: (context) {
+      String? imageUrl;
+
+      return AlertDialog(
+        title: const Text("Add Image"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton(
+              onPressed: () async {
+                // 이미지를 선택하고 Firebase에 업로드
+                imageUrl = await _uploadImageToFirebase();
+              },
+              child: const Text("Choose Image"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              if (imageUrl != null) {
+                // Firestore에 이미지 URL 저장
+                await FirebaseFirestore.instance
+                    .collection('taskGoal')
+                    .doc(taskId)
+                    .update({
+                  "images": FieldValue.arrayUnion([imageUrl])
+                });
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text("OK"),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<String?> _uploadImageToFirebase() async {
+  // 이미지 선택 및 Firebase Storage 업로드 로직
+  // ...
+  return "uploaded_image_url"; // 업로드된 이미지 URL 반환
 }
 
 class TaskGoalModal extends StatefulWidget {
@@ -315,13 +395,15 @@ class _TaskGoalModalState extends State<TaskGoalModal> {
       setState(() {
         hasDuplicateTask = true;
       });
-    } else if (selectedTask.isNotEmpty && selectedGraph != -1 && selectedRatio != -1) {
+    } else if (selectedTask.isNotEmpty &&
+        selectedGraph != -1 &&
+        selectedRatio != -1) {
       final taskGoalRef = FirebaseFirestore.instance.collection('taskGoal');
       await taskGoalRef.add({
         "task": selectedTask,
         "ratio": selectedRatio,
         "graph": selectedGraph,
-        "comments": List.generate(4, (index) => ""),
+        "comments": List.generate(8, (index) => ""),
         "images": List.generate(4, (index) => ""),
       });
       widget.onTaskSelected(selectedTask);
