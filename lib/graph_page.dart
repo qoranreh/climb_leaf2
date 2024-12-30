@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 class GraphPage extends StatefulWidget {
@@ -140,10 +141,13 @@ class _GraphPageState extends State<GraphPage> {
       print("Error updating comments: $e");
     }
   }
-
-  void _showImagePickerModal(
-      BuildContext context, String taskId, int index) async {
-    String? selectedImageUrl; // 업로드된 이미지 URL
+  Future<String> _saveImageLocally(File imageFile, String fileName) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final imagePath = '${directory.path}/$fileName';
+    final savedImage = await imageFile.copy(imagePath);
+    return savedImage.path;
+  }
+  void _showImagePickerModal(BuildContext context, String taskId, int index) async {
     File? selectedImageFile; // 로컬에서 선택한 이미지 파일
 
     showDialog(
@@ -178,25 +182,21 @@ class _GraphPageState extends State<GraphPage> {
                         setState(() {
                           selectedImageFile = File(pickedFile.path);
                         });
-                        print("Selected Image Path: ${pickedFile.path}");
 
-                        // Firebase Storage에 이미지 업로드
-                        if (selectedImageFile != null) {
-                          try {
-                            final storageRef = FirebaseStorage.instance
-                                .ref()
-                                .child('taskImages/$taskId/image_$index.jpg');
-                            final uploadTask =
-                            await storageRef.putFile(selectedImageFile!);
-                            selectedImageUrl =
-                            await uploadTask.ref.getDownloadURL();
-                            print("Image uploaded successfully: $selectedImageUrl");
-                          } catch (e) {
-                            print("Error during image upload: $e");
-                          }
-                        }
-                      } else {
-                        print("No image selected.");
+                        // 로컬 상태 업데이트
+                        setState(() {
+                          taskGoals = taskGoals.map((goal) {
+                            if (goal['id'] == taskId) {
+                              final updatedImages = List<String>.from(goal['images']);
+                              if (updatedImages.length <= index) {
+                                updatedImages.length = index + 1; // 배열 확장
+                              }
+                              updatedImages[index] = pickedFile.path;
+                              return {...goal, 'images': updatedImages};
+                            }
+                            return goal;
+                          }).toList();
+                        });
                       }
                     },
                     child: const Text("Choose Image"),
@@ -205,42 +205,13 @@ class _GraphPageState extends State<GraphPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () async {
-                    if (selectedImageUrl != null) {
-                      try {
-                        // Firestore의 images 리스트 업데이트
-                        final taskGoalRef = FirebaseFirestore.instance
-                            .collection('taskGoal')
-                            .doc(taskId);
-                        final snapshot = await taskGoalRef.get();
-                        if (snapshot.exists) {
-                          List<dynamic> currentImages =
-                              snapshot.data()?['images'] ?? [];
-                          if (currentImages.length <= index) {
-                            currentImages.length = index + 1; // 배열 확장
-                          }
-                          currentImages[index] = selectedImageUrl;
-
-                          await taskGoalRef.update({'images': currentImages});
-                          print(
-                              "Image URL saved to Firestore at index $index: $selectedImageUrl");
-                        } else {
-                          print("Document with ID $taskId does not exist.");
-                        }
-                      } catch (e) {
-                        print("Error saving image URL: $e");
-                      }
-                    } else {
-                      print("No image URL to save.");
-                    }
+                  onPressed: () {
                     Navigator.of(context).pop(); // 모달창 닫기
-                    _loadTaskGoals(); // Firestore 데이터 다시 로드
                   },
                   child: const Text("OK"),
                 ),
                 TextButton(
                   onPressed: () {
-                    print("Image upload cancelled.");
                     Navigator.of(context).pop(); // 모달창 닫기
                   },
                   child: const Text("Cancel"),
@@ -252,6 +223,8 @@ class _GraphPageState extends State<GraphPage> {
       },
     );
   }
+
+
 
 
 
@@ -458,20 +431,19 @@ class _GraphPageState extends State<GraphPage> {
                     child: Row(
                       children: [
                         GestureDetector(
-                          onDoubleTap: () => _showImagePickerModal(
-                              context, taskGoal['id'], index),
+                          onDoubleTap: () => _showImagePickerModal(context, taskGoal['id'], index),
                           child: imageUrl.isEmpty
                               ? Icon(
-                                  Icons.image,
-                                  size: 40,
-                                  color: Colors.blueAccent,
-                                )
-                              : Image.network(
-                                  imageUrl,
-                                  width: 40,
-                                  height: 40,
-                                  fit: BoxFit.cover,
-                                ),
+                            Icons.image,
+                            size: 40,
+                            color: Colors.blueAccent,
+                          )
+                              : Image.file(
+                            File(imageUrl), // 로컬 이미지 경로를 File 객체로 변환
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                         const SizedBox(width: 20),
                         Expanded(
