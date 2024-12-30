@@ -2,6 +2,9 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
 
 class GraphPage extends StatefulWidget {
   const GraphPage({
@@ -111,10 +114,12 @@ class _GraphPageState extends State<GraphPage> {
       });
     }
   }
+
   void saveCommentToFirebase(
       String taskId, int index, String expected, String comment) async {
     try {
-      final taskGoalRef = FirebaseFirestore.instance.collection('taskGoal').doc(taskId);
+      final taskGoalRef =
+          FirebaseFirestore.instance.collection('taskGoal').doc(taskId);
       final snapshot = await taskGoalRef.get();
 
       if (snapshot.exists) {
@@ -135,6 +140,120 @@ class _GraphPageState extends State<GraphPage> {
       print("Error updating comments: $e");
     }
   }
+
+  void _showImagePickerModal(
+      BuildContext context, String taskId, int index) async {
+    String? selectedImageUrl; // 업로드된 이미지 URL
+    File? selectedImageFile; // 로컬에서 선택한 이미지 파일
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text("Add Image"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (selectedImageFile != null)
+                  // 선택한 이미지 미리보기
+                    Image.file(
+                      selectedImageFile!,
+                      width: 200,
+                      height: 200,
+                      fit: BoxFit.cover,
+                    )
+                  else
+                    const Text("No image selected."),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final picker = ImagePicker();
+                      final pickedFile =
+                      await picker.pickImage(source: ImageSource.gallery);
+
+                      if (pickedFile != null) {
+                        // 선택한 이미지 파일 저장
+                        setState(() {
+                          selectedImageFile = File(pickedFile.path);
+                        });
+                        print("Selected Image Path: ${pickedFile.path}");
+
+                        // Firebase Storage에 이미지 업로드
+                        if (selectedImageFile != null) {
+                          try {
+                            final storageRef = FirebaseStorage.instance
+                                .ref()
+                                .child('taskImages/$taskId/image_$index.jpg');
+                            final uploadTask =
+                            await storageRef.putFile(selectedImageFile!);
+                            selectedImageUrl =
+                            await uploadTask.ref.getDownloadURL();
+                            print("Image uploaded successfully: $selectedImageUrl");
+                          } catch (e) {
+                            print("Error during image upload: $e");
+                          }
+                        }
+                      } else {
+                        print("No image selected.");
+                      }
+                    },
+                    child: const Text("Choose Image"),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    if (selectedImageUrl != null) {
+                      try {
+                        // Firestore의 images 리스트 업데이트
+                        final taskGoalRef = FirebaseFirestore.instance
+                            .collection('taskGoal')
+                            .doc(taskId);
+                        final snapshot = await taskGoalRef.get();
+                        if (snapshot.exists) {
+                          List<dynamic> currentImages =
+                              snapshot.data()?['images'] ?? [];
+                          if (currentImages.length <= index) {
+                            currentImages.length = index + 1; // 배열 확장
+                          }
+                          currentImages[index] = selectedImageUrl;
+
+                          await taskGoalRef.update({'images': currentImages});
+                          print(
+                              "Image URL saved to Firestore at index $index: $selectedImageUrl");
+                        } else {
+                          print("Document with ID $taskId does not exist.");
+                        }
+                      } catch (e) {
+                        print("Error saving image URL: $e");
+                      }
+                    } else {
+                      print("No image URL to save.");
+                    }
+                    Navigator.of(context).pop(); // 모달창 닫기
+                    _loadTaskGoals(); // Firestore 데이터 다시 로드
+                  },
+                  child: const Text("OK"),
+                ),
+                TextButton(
+                  onPressed: () {
+                    print("Image upload cancelled.");
+                    Navigator.of(context).pop(); // 모달창 닫기
+                  },
+                  child: const Text("Cancel"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+
 
   void _showCommentModal(BuildContext context, String taskId, int index,
       Function(String expected, String comment) onSave) {
@@ -227,7 +346,7 @@ class _GraphPageState extends State<GraphPage> {
                   ),
                   Text(
                     selectedTask == "-" ||
-                        !widget.taskSummary.containsKey(selectedTask)
+                            !widget.taskSummary.containsKey(selectedTask)
                         ? selectedTask
                         : "$selectedTask : ${widget.taskSummary[selectedTask]}",
                     style: const TextStyle(
@@ -294,7 +413,7 @@ class _GraphPageState extends State<GraphPage> {
                           LineChartBarData(
                             spots: List.generate(
                               101,
-                                  (x) => calculateGraphSpot(graphType, x),
+                              (x) => calculateGraphSpot(graphType, x),
                             ),
                             color: Colors.black,
                             isCurved: false,
@@ -327,19 +446,32 @@ class _GraphPageState extends State<GraphPage> {
                     return const Center(child: Text("Please add Comment"));
                   }
                   final taskGoal = taskGoals[currentPageIndex];
+                  final images =
+                      taskGoal['images'] as List<dynamic>; // images 리스트 가져오기
+                  final imageUrl = (images.length > index)
+                      ? images[index] as String
+                      : ""; // index에 해당하는 이미지 URL
+
                   return Container(
                     margin: const EdgeInsets.symmetric(vertical: 16.0),
                     padding: const EdgeInsets.all(5),
                     child: Row(
                       children: [
                         GestureDetector(
-                          onDoubleTap: () =>
-                              _showImageModal(context, taskGoal['id']),
-                          child: Icon(
-                            Icons.image,
-                            size: 40,
-                            color: Colors.blueAccent,
-                          ),
+                          onDoubleTap: () => _showImagePickerModal(
+                              context, taskGoal['id'], index),
+                          child: imageUrl.isEmpty
+                              ? Icon(
+                                  Icons.image,
+                                  size: 40,
+                                  color: Colors.blueAccent,
+                                )
+                              : Image.network(
+                                  imageUrl,
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                ),
                         ),
                         const SizedBox(width: 20),
                         Expanded(
@@ -348,7 +480,7 @@ class _GraphPageState extends State<GraphPage> {
                               context,
                               taskGoal['id'],
                               index,
-                                  (expected, comment) {
+                              (expected, comment) {
                                 saveCommentToFirebase(
                                     taskGoal['id'], index, expected, comment);
                               },
@@ -358,7 +490,7 @@ class _GraphPageState extends State<GraphPage> {
                               children: [
                                 Text(
                                   taskGoal['comments'].length > index * 2 &&
-                                      taskGoal['comments'][index * 2] != ""
+                                          taskGoal['comments'][index * 2] != ""
                                       ? "${taskGoal['comments'][index * 2]}"
                                       : "No Expected Achievement",
                                   style: const TextStyle(
@@ -370,8 +502,8 @@ class _GraphPageState extends State<GraphPage> {
                                 const SizedBox(height: 4),
                                 Text(
                                   taskGoal['comments'].length > index * 2 + 1 &&
-                                      taskGoal['comments'][index * 2 + 1] !=
-                                          ""
+                                          taskGoal['comments'][index * 2 + 1] !=
+                                              ""
                                       ? """Comment: 
                                       ${taskGoal['comments'][index * 2 + 1]}"""
                                       : "No Comment",
@@ -397,55 +529,23 @@ class _GraphPageState extends State<GraphPage> {
     );
   }
 }
-void _showImageModal(BuildContext context, String taskId) {
-  showDialog(
-    context: context,
-    builder: (context) {
-      String? imageUrl;
 
-      return AlertDialog(
-        title: const Text("Add Image"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton(
-              onPressed: () async {
-                // 이미지를 선택하고 Firebase에 업로드
-                imageUrl = await _uploadImageToFirebase();
-              },
-              child: const Text("Choose Image"),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              if (imageUrl != null) {
-                // Firestore에 이미지 URL 저장
-                await FirebaseFirestore.instance
-                    .collection('taskGoal')
-                    .doc(taskId)
-                    .update({
-                  "images": FieldValue.arrayUnion([imageUrl])
-                });
-              }
-              Navigator.of(context).pop();
-            },
-            child: const Text("OK"),
-          ),
-        ],
-      );
-    },
-  );
+Future<String?> _uploadImageToFirebase(
+    XFile image, String taskId, int index) async {
+  try {
+    final storageRef = FirebaseStorage.instance.ref().child(
+        'uploads/$taskId/$index-${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+    final uploadTask = storageRef.putFile(File(image.path));
+    final snapshot = await uploadTask.whenComplete(() => null);
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+
+    return downloadUrl;
+  } catch (e) {
+    print('Error uploading image: $e');
+    return null;
+  }
 }
-
-Future<String?> _uploadImageToFirebase() async {
-  // 이미지 선택 및 Firebase Storage 업로드 로직
-  // ...
-  return "uploaded_image_url"; // 업로드된 이미지 URL 반환
-}
-
-
 
 class TaskGoalModal extends StatefulWidget {
   const TaskGoalModal({
