@@ -77,7 +77,6 @@ class _GraphPageState extends State<GraphPage> {
     );
   }
 
-  // 그래프 계산 함수
   FlSpot calculateGraphSpot(int graphType, int x) {
     double xValue = x.toDouble();
     double yValue;
@@ -95,13 +94,11 @@ class _GraphPageState extends State<GraphPage> {
     return FlSpot(xValue, yValue);
   }
 
-  // x 값 계산 함수 (그래프 위 점)
   double calculateXForDot(int taskValue, int ratio) {
     if (ratio == 0) return 0;
     return taskValue / (ratio / 100);
   }
 
-  // 페이지 데이터 업데이트
   void _updatePageData(int index) {
     if (taskGoals.isNotEmpty && index < taskGoals.length) {
       final taskGoal = taskGoals[index];
@@ -114,9 +111,82 @@ class _GraphPageState extends State<GraphPage> {
       });
     }
   }
+  void saveCommentToFirebase(
+      String taskId, int index, String expected, String comment) async {
+    try {
+      final taskGoalRef = FirebaseFirestore.instance.collection('taskGoal').doc(taskId);
+      final snapshot = await taskGoalRef.get();
 
+      if (snapshot.exists) {
+        List<dynamic> currentComments = snapshot.data()?['comments'] ?? [];
 
+        // 배열 확장 및 특정 위치에 데이터 업데이트
+        if (currentComments.length <= index * 2 + 1) {
+          currentComments.length = index * 2 + 2; // 길이 조정
+        }
+        currentComments[index * 2] = expected;
+        currentComments[index * 2 + 1] = comment;
 
+        // Firestore에 업데이트
+        await taskGoalRef.update({'comments': currentComments});
+        _loadTaskGoals(); // Firebase 데이터 다시 로드
+      }
+    } catch (e) {
+      print("Error updating comments: $e");
+    }
+  }
+
+  void _showCommentModal(BuildContext context, String taskId, int index,
+      Function(String expected, String comment) onSave) {
+    final expectedController = TextEditingController();
+    final commentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Add Comment"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: expectedController,
+                decoration: const InputDecoration(
+                  labelText: "Expected Achievement",
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: commentController,
+                decoration: const InputDecoration(
+                  labelText: "Comment",
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                onSave(
+                  expectedController.text,
+                  commentController.text,
+                );
+                _loadTaskGoals(); // Firebase에서 데이터 다시 가져오기
+                Navigator.of(context).pop();
+              },
+              child: const Text("OK"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text("Cancel"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +227,7 @@ class _GraphPageState extends State<GraphPage> {
                   ),
                   Text(
                     selectedTask == "-" ||
-                            !widget.taskSummary.containsKey(selectedTask)
+                        !widget.taskSummary.containsKey(selectedTask)
                         ? selectedTask
                         : "$selectedTask : ${widget.taskSummary[selectedTask]}",
                     style: const TextStyle(
@@ -187,7 +257,6 @@ class _GraphPageState extends State<GraphPage> {
                   final graphType = taskGoal['graph'] ?? 0;
                   final ratio = taskGoal['ratio'] ?? 100;
 
-                  // x 값 계산 (점 표시용)
                   double dotX = calculateXForDot(
                     widget.taskSummary[selectedTask] ?? 0,
                     ratio,
@@ -225,7 +294,7 @@ class _GraphPageState extends State<GraphPage> {
                           LineChartBarData(
                             spots: List.generate(
                               101,
-                              (x) => calculateGraphSpot(graphType, x),
+                                  (x) => calculateGraphSpot(graphType, x),
                             ),
                             color: Colors.black,
                             isCurved: false,
@@ -249,75 +318,85 @@ class _GraphPageState extends State<GraphPage> {
               ),
             ),
             // ListViewBuilder
-        Expanded(
-          flex: 4,
-          child: ListView.builder(
-            itemCount: taskGoals.isNotEmpty ? 1 : 0, // 선택된 Task만 표시
-            itemBuilder: (context, index) {
-              if (taskGoals.isEmpty) {
-                return const Center(child: Text("Please add Comment"));
-              }
-              final taskGoal = taskGoals[currentPageIndex]; // 현재 선택된 페이지의 TaskGoal 사용
-              return Container(
-                margin: const EdgeInsets.symmetric(vertical: 16.0),
-                padding: const EdgeInsets.all(5),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onDoubleTap: () =>
-                          _showImageModal(context, taskGoal['id']), // 이미지 업로드
-                      child: Icon(
-                        Icons.image,
-                        size: 40,
-                        color: Colors.blueAccent,
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: GestureDetector(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              taskGoal['comments'].length > 0 &&
-                                  taskGoal['comments'][0] != ""
-                                  ? "Expected: ${taskGoal['comments'][0]}"
-                                  : "No Expected Achievement",
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blueAccent,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              taskGoal['comments'].length > 1 &&
-                                  taskGoal['comments'][1] != ""
-                                  ? "Comment: ${taskGoal['comments'][1]}"
-                                  : "No Comment",
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.normal,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ],
+            Expanded(
+              flex: 4,
+              child: ListView.builder(
+                itemCount: taskGoals.isNotEmpty ? 4 : 0,
+                itemBuilder: (context, index) {
+                  if (taskGoals.isEmpty) {
+                    return const Center(child: Text("Please add Comment"));
+                  }
+                  final taskGoal = taskGoals[currentPageIndex];
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 16.0),
+                    padding: const EdgeInsets.all(5),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onDoubleTap: () =>
+                              _showImageModal(context, taskGoal['id']),
+                          child: Icon(
+                            Icons.image,
+                            size: 40,
+                            color: Colors.blueAccent,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: GestureDetector(
+                            onDoubleTap: () => _showCommentModal(
+                              context,
+                              taskGoal['id'],
+                              index,
+                                  (expected, comment) {
+                                saveCommentToFirebase(
+                                    taskGoal['id'], index, expected, comment);
+                              },
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  taskGoal['comments'].length > index * 2 &&
+                                      taskGoal['comments'][index * 2] != ""
+                                      ? "${taskGoal['comments'][index * 2]}"
+                                      : "No Expected Achievement",
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  taskGoal['comments'].length > index * 2 + 1 &&
+                                      taskGoal['comments'][index * 2 + 1] !=
+                                          ""
+                                      ? """Comment: 
+                                      ${taskGoal['comments'][index * 2 + 1]}"""
+                                      : "No Comment",
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.normal,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
-
 void _showImageModal(BuildContext context, String taskId) {
   showDialog(
     context: context,
@@ -365,6 +444,8 @@ Future<String?> _uploadImageToFirebase() async {
   // ...
   return "uploaded_image_url"; // 업로드된 이미지 URL 반환
 }
+
+
 
 class TaskGoalModal extends StatefulWidget {
   const TaskGoalModal({
