@@ -34,38 +34,55 @@ class _TimetablePageState extends State<TimetablePage> {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Map<String, int> getTaskSummary() {
+  Future<Map<String, int>> getTaskSummary() async {
     Map<String, int> summary = {};
-    for (var day in timetable) {
-      for (var hourTasks in day) {
-        for (var task in hourTasks) {
-          if (task != 'New Task') {
-            // 'New Task'를 제외
-            summary[task] = (summary[task] ?? 0) + 1; // 작업 수 증가
+
+    try {
+      // Firestore에서 모든 timetables 문서 가져오기
+      final querySnapshot = await _firestore.collection('timetables').get();
+
+      // 각 문서 데이터를 읽어와 taskSummary 계산
+      for (var doc in querySnapshot.docs) {
+        final data = doc.data();
+        if (data.containsKey('days')) {
+          final days = data['days'] as Map<String, dynamic>;
+
+          for (var day in days.values) {
+            final dayMap = day as Map<String, dynamic>;
+
+            for (var hourTasks in dayMap.values) {
+              final tasks = List<String>.from(hourTasks ?? []);
+              for (var task in tasks) {
+                if (task != 'New Task') {
+                  summary[task] = (summary[task] ?? 0) + 1; // 작업 수 증가
+                }
+              }
+            }
           }
         }
       }
+
+      print("Task Summary: $summary");
+    } catch (e) {
+      print("Error fetching task summary: $e");
     }
+
     return summary;
   }
-
-  Map<String, List<DateTime>> taskHistory = {
-    "운동": [
-      DateTime.now().subtract(Duration(days: 1)),
-      DateTime.now().subtract(Duration(days: 3)),
-    ],
-    "공부": [
-      DateTime.now().subtract(Duration(days: 2)),
-      DateTime.now().subtract(Duration(days: 3)),
-      DateTime.now().subtract(Duration(days: 3)),
-    ],
-  };
+  Future<void> loadTaskSummary() async {
+    final summary = await getTaskSummary();
+    setState(() {
+      taskSummary = summary; // taskSummary 업데이트
+    });
+  }
+  Map<String, int> taskSummary = {};
   Map<DateTime, int> taskData = {
     DateTime(2023, 12, 1): 5,
     DateTime(2023, 12, 2): 3,
     DateTime(2023, 12, 3): 8,
   };
 
+  @override
   @override
   void initState() {
     super.initState();
@@ -74,13 +91,16 @@ class _TimetablePageState extends State<TimetablePage> {
     currentWeekKey = _getWeekKey(selectedDates); // 주 키 계산
     _loadWeekData(); // 현재 주 데이터 Firestore에서 로드
 
-    WidgetsBinding.instance.addPostFrameCallback((_){
-      hourScrollController.jumpTo(currentHour*50.0);//시간당 100픽셀 간격 (화면조정)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      hourScrollController.jumpTo(currentHour * 50.0); // 시간당 100픽셀 간격 (화면조정)
     });
 
     hourScrollController.addListener(() {
       print("Current Scroll Offset: ${hourScrollController.offset}");
     });
+
+    // Task Summary 로드
+    loadTaskSummary();
   }
 
   @override
@@ -105,7 +125,7 @@ class _TimetablePageState extends State<TimetablePage> {
     TextEditingController textController = TextEditingController();
 
     // 요약 데이터를 가져와서 상위 3개의 작업만 표시
-    Map<String, int> summary = getTaskSummary();
+    final summary = taskSummary;
     List<MapEntry<String, int>> sortedEntries = summary.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value)); // value 높은 순 정렬
 
@@ -385,7 +405,7 @@ class _TimetablePageState extends State<TimetablePage> {
                               drawVerticalLine: false, // 수직선 표시 비활성화
                               drawHorizontalLine: false,  // 수평선 간격 (필요에 따라 조정)
                             ),
-                    
+
                           borderData: FlBorderData(show: false), // 테두리 표시
                           titlesData: FlTitlesData(
                             topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 상단 수치 비활성화
@@ -426,13 +446,14 @@ class _TimetablePageState extends State<TimetablePage> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.bar_chart),
-                        onPressed: () {
+                        onPressed: ()  async {
+                          final summary = await getTaskSummary(); // 전체 요약 데이터 가져오기
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => GraphPage(
                                 selectedDates: selectedDates,
                                 currentDay: currentDay,
-                                taskSummary: getTaskSummary(),// taskSummary 전달
+                                taskSummary: summary, // 전체 taskSummary 전달
                                 onTaskAdded: _reloadPage,
                               ),
                             ),
