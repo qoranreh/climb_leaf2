@@ -1,10 +1,14 @@
 import 'dart:math';
 
+import 'package:climb_leaf2/task_goal_provider.dart';
 import 'package:climb_leaf2/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'calendar_page.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import 'provalues.dart';
+import 'task_goal_provider.dart';
 
 import 'graph_page.dart';
 
@@ -20,12 +24,20 @@ class _TimetablePageState extends State<TimetablePage> {
   final List<String> days = ['월', '화', '수', '목', '금', '토', '일']; // 요일
   late final PageController pageController;
 
-  final ScrollController hourScrollController = ScrollController(); // 시간별 스크롤 컨트롤러
+  final ScrollController hourScrollController =
+      ScrollController(); // 시간별 스크롤 컨트롤러
   int currentHour = DateTime.now().hour; // 현재 시간
-
 
   List<List<List<String>>> timetable =
       List.generate(7, (index) => List.generate(24, (i) => [])); // 일주일 데이터 저장
+
+  List<FlSpot> generateGraphSpots(TaskGoal taskGoal) {
+    final graphType = taskGoal.graph; // TaskGoal 객체에서 graph 가져오기
+    return List.generate(
+      101, // X값 범위 (0~100)
+          (x) => calculateGraphSpot(graphType, x), // 각 X값에 대해 Spot 생성
+    );
+  }
 
   String currentWeekKey = ""; // 현재 주를 나타내는 키 (yyyy-MM-dd)
   String currentDay = '월';
@@ -69,12 +81,14 @@ class _TimetablePageState extends State<TimetablePage> {
 
     return summary;
   }
+
   Future<void> loadTaskSummary() async {
     final summary = await getTaskSummary();
     setState(() {
       taskSummary = summary; // taskSummary 업데이트
     });
   }
+
   Map<String, int> taskSummary = {};
   Map<DateTime, int> taskData = {
     DateTime(2023, 12, 1): 5,
@@ -211,10 +225,27 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
+  FlSpot calculateGraphSpot(int graphType, int x) {
+    double xValue = x.toDouble();
+    double yValue;
 
+    if (graphType == 0) {
+      yValue = 100 / (1 + pow(2, 5 - 0.1 * xValue));
+    } else if (graphType == 1) {
+      yValue = xValue;
+    } else if (graphType == 2) {
+      yValue = 0.01 * pow(xValue, 2);
+    } else {
+      yValue = 0.0;
+    }
 
+    return FlSpot(xValue, yValue);
+  }
 
-
+  double calculateXForDot(int taskValue, int ratio) {
+    if (ratio == 0) return 0;
+    return taskValue / (ratio / 100);
+  }
 
   void _onPageChanged(int pageIndex) {
     setState(() {
@@ -318,12 +349,14 @@ class _TimetablePageState extends State<TimetablePage> {
       _initializeEmptyTimetable(); // 에러 발생 시 기본값 설정
     }
   }
+
   void _reloadPage() {
     setState(() {
       // 필요한 데이터를 다시 로드하거나 UI 업데이트 수행
       print("Reload triggered from GraphPage!");
     });
   }
+
   // 빈 데이터 초기화 함수
   void _initializeEmptyTimetable() {
     setState(() {
@@ -334,6 +367,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
   @override
   Widget build(BuildContext context) {
+    final taskGoal = Provider.of<TaskGoalProvider>(context).selectedTaskGoal;
     return Scaffold(
       appBar: AppBar(
         leadingWidth: 100.0,
@@ -375,10 +409,19 @@ class _TimetablePageState extends State<TimetablePage> {
                           color: Colors.white,
                           alignment: Alignment.bottomLeft,
                           margin: EdgeInsets.fromLTRB(60, 0, 0, 0),
-                          child: const Text(
-                            '상단 텍스트',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
+                          child: Consumer<TaskGoalProvider>(
+                            builder: (context, taskGoalProvider, child) {
+                              final selectedTask =
+                                  taskGoalProvider.selectedTaskGoal?.task ??
+                                      "No Task Selected";
+                              return Text(
+                                selectedTask, // Provider에서 가져온 선택된 task 표시
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -389,46 +432,64 @@ class _TimetablePageState extends State<TimetablePage> {
                   color: Colors.white, // 배경색
                   alignment: Alignment.bottomRight, // 아래쪽 정렬
                   child: CustomPaint(
-                    //그림자 넣기 나중에
                     child: Container(
                       decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.black12//회색배경
+                        borderRadius: BorderRadius.circular(16),
+                        color: Colors.black12, // 회색 배경
                       ),
                       width: MediaQuery.of(context).size.width * 0.65,
                       height: 150,
                       padding: EdgeInsets.fromLTRB(20, 20, 20, 20),
-                      child: LineChart(
-                        LineChartData( // 격자 표시
-                            gridData: FlGridData(//그래프안 점선 싹다 비활
-                              show: false, // 격자 표시 여부
-                              drawVerticalLine: false, // 수직선 표시 비활성화
-                              drawHorizontalLine: false,  // 수평선 간격 (필요에 따라 조정)
-                            ),
+                      child: Consumer<TaskGoalProvider>(
+                        builder: (context, taskGoalProvider, child) {
+                          final taskGoal = taskGoalProvider.selectedTaskGoal;
+                          if (taskGoal == null) {
+                            return const Center(
+                              child: Text("No Task Goal Selected"),
+                            );
+                          }
 
-                          borderData: FlBorderData(show: false), // 테두리 표시
-                          titlesData: FlTitlesData(
-                            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 상단 수치 비활성화
-                            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 우측 수치 비활성화
-                            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // Y축 수치 활성화
-                            bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)), // X축 수치 활성화
-                          ),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: List.generate(101, (x) {
-                                return FlSpot(x.toDouble(), x.toDouble()); // 일차 함수 y = x
-                              }),
-                              isCurved: false, // 직선 그래프
-                              barWidth: 2,  // 선 색상
-                              dotData: FlDotData(show: false),
-                                color: Colors.black // 점 숨김
+                          final spots = generateGraphSpots(taskGoal);
+
+                          return LineChart(
+                            LineChartData(
+                              gridData: FlGridData(
+                                show: false, // 격자 표시 비활성화
+                              ),
+                              borderData: FlBorderData(show: false), // 테두리 표시 비활성화
+                              titlesData: FlTitlesData(
+                                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 상단 수치 비활성화
+                                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // 우측 수치 비활성화
+                                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), // Y축 수치 비활성화
+                                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)), // X축 수치 활성화
+                              ),
+                              lineBarsData: [
+                                LineChartBarData(
+                                  spots: List.generate(
+                                    101, // X값의 범위 (0 ~ 100)
+                                        (x) => calculateGraphSpot(taskGoal.graph, x), // graphType에 따른 Spot 생성
+                                  ),
+                                  color: Colors.black,
+                                  isCurved: false, // 직선 그래프
+                                  barWidth: 2,
+                                  dotData: FlDotData(
+                                    show: true,
+                                    checkToShowDot: (spot, barData) {
+                                      final dotX = calculateXForDot(
+                                        taskSummary[taskGoal.task] ?? 0, // taskSummary에서 값 가져오기
+                                        taskGoal.ratio, // 작업 비율
+                                      );
+                                      return spot.x == dotX;
+                                    },), // 점 표시
+                                ),
+                              ],
+                              minX: 0,
+                              maxX: 100,
+                              minY: 0,
+                              maxY: 100,
                             ),
-                          ],
-                          minX: 0,
-                          maxX: 100,
-                          minY: 0,
-                          maxY: 100,
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -446,8 +507,9 @@ class _TimetablePageState extends State<TimetablePage> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.bar_chart),
-                        onPressed: ()  async {
-                          final summary = await getTaskSummary(); // 전체 요약 데이터 가져오기
+                        onPressed: () async {
+                          final summary =
+                              await getTaskSummary(); // 전체 요약 데이터 가져오기
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => GraphPage(
@@ -486,7 +548,9 @@ class _TimetablePageState extends State<TimetablePage> {
                 // 페이지 변경 이벤트 처리
                 itemBuilder: (context, dayIndex) {
                   return ListView.builder(
-                    controller: dayIndex==selectedDates.weekday-1?hourScrollController:null,
+                    controller: dayIndex == selectedDates.weekday - 1
+                        ? hourScrollController
+                        : null,
                     itemCount: hoursInDay,
                     itemBuilder: (context, hourIndex) {
                       bool isCurrentHour = hourIndex == currentHour;
@@ -496,10 +560,11 @@ class _TimetablePageState extends State<TimetablePage> {
                         child: Row(
                           children: [
                             Expanded(
-                              flex:2,
+                              flex: 2,
                               child: Container(
-                                color: isCurrentHour ? Colors.red.withOpacity(0.2) : Colors.transparent,
-
+                                color: isCurrentHour
+                                    ? Colors.red.withOpacity(0.2)
+                                    : Colors.transparent,
                                 alignment: Alignment.center,
                                 child: Text(
                                   hourIndex.toString().padLeft(2, '0'),
@@ -507,9 +572,8 @@ class _TimetablePageState extends State<TimetablePage> {
                                 ),
                               ),
                             ),
-
                             Expanded(
-                              flex:7,
+                              flex: 7,
                               child: Container(
                                 height: 50,
                                 child: ListView.builder(
@@ -517,8 +581,8 @@ class _TimetablePageState extends State<TimetablePage> {
                                   itemCount:
                                       timetable[dayIndex][hourIndex].length,
                                   itemBuilder: (context, taskIndex) {
-                                    String task =
-                                        timetable[dayIndex][hourIndex][taskIndex];
+                                    String task = timetable[dayIndex][hourIndex]
+                                        [taskIndex];
                                     return Padding(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 2.0),

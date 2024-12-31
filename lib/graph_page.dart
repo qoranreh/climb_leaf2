@@ -6,7 +6,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
-
+import 'package:provider/provider.dart';
+import 'provalues.dart';
+import 'task_goal_provider.dart';
 import 'dart:io';
 
 class GraphPage extends StatefulWidget {
@@ -119,9 +121,21 @@ class _GraphPageState extends State<GraphPage> {
 
   void _updatePageData(int index) {
     if (taskGoals.isNotEmpty && index < taskGoals.length) {
-      final taskGoal = taskGoals[index];
+      final taskGoalData = taskGoals[index];
+      final taskGoal = TaskGoal(
+        id: taskGoalData['id'],
+        task: taskGoalData['task'] ?? "-",
+        ratio: taskGoalData['ratio'] ?? 0,
+        graph: taskGoalData['graph'] ?? 0,
+        comments: List<String>.from(taskGoalData['comments'] ?? []),
+        images: List<String>.from(taskGoalData['images'] ?? []),
+      );
+
+      // Provider로 선택한 TaskGoal 설정
+      Provider.of<TaskGoalProvider>(context, listen: false).selectTaskGoal(taskGoal);
+
       setState(() {
-        selectedTask = taskGoal['task'] ?? "-";
+        selectedTask = taskGoal.task;
       });
     } else {
       setState(() {
