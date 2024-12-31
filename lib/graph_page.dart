@@ -348,7 +348,7 @@ class _GraphPageState extends State<GraphPage> {
             ),
             // 그래프 표시
             Expanded(
-              flex: 3,
+              flex: 6,
               child: PageView.builder(
                 itemCount: taskGoals.isNotEmpty ? taskGoals.length : 1,
                 onPageChanged: (index) {
@@ -451,13 +451,13 @@ class _GraphPageState extends State<GraphPage> {
                               child: imageUrl.isEmpty
                                   ? Icon(
                                 Icons.image,
-                                size: 40,
+                                size: 90,
                                 color: Colors.blueAccent,
                               )
                                   : Image.file(
                                 File(imageUrl), // 로컬 경로의 이미지 파일
-                                width: 40,
-                                height: 40,
+                                width: 90,
+                                height: 90,
                                 fit: BoxFit.cover,
                               ),
                             ),
@@ -503,7 +503,15 @@ class _GraphPageState extends State<GraphPage> {
                                   ],
                                 ),
                               ),
+
                             ),
+                            Column(
+
+                              children: [
+                                Icon(Icons.star,color: Colors.yellow,),
+                                Text(_getPercentageText(index))
+                              ]
+                            )
                           ],
                         ),
                       );
@@ -512,10 +520,27 @@ class _GraphPageState extends State<GraphPage> {
                 },
               ),
             ),
+            Expanded(
+              flex: 1,
+                child: Container())
           ],
         ),
       ),
     );
+  }
+}
+String _getPercentageText(int index) {
+  switch (index) {
+    case 0:
+      return "0%";
+    case 1:
+      return "30%";
+    case 2:
+      return "60%";
+    case 3:
+      return "100%";
+    default:
+      return "$index"; // 기본적으로 Index 그대로 반환
   }
 }
 
