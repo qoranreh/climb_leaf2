@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
+
 import 'dart:io';
 
 class GraphPage extends StatefulWidget {
@@ -36,7 +38,19 @@ class _GraphPageState extends State<GraphPage> {
     selectedTask = "-";
     _loadTaskGoals();
   }
+// 이미지 저장
+  Future<void> saveImagePath(String taskId, int index, String imagePath) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'image_${taskId}_$index'; // 고유 키 생성
+    await prefs.setString(key, imagePath);
+  }
 
+// 이미지 경로 불러오기
+  Future<String?> loadImagePath(String taskId, int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'image_${taskId}_$index'; // 고유 키로 이미지 경로 불러오기
+    return prefs.getString(key);
+  }
   Future<void> _loadTaskGoals() async {
     final taskGoalRef = FirebaseFirestore.instance.collection('taskGoal');
     final snapshot = await taskGoalRef.get();
@@ -148,7 +162,7 @@ class _GraphPageState extends State<GraphPage> {
     return savedImage.path;
   }
   void _showImagePickerModal(BuildContext context, String taskId, int index) async {
-    File? selectedImageFile; // 로컬에서 선택한 이미지 파일
+    File? selectedImageFile;
 
     showDialog(
       context: context,
@@ -161,7 +175,6 @@ class _GraphPageState extends State<GraphPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (selectedImageFile != null)
-                  // 선택한 이미지 미리보기
                     Image.file(
                       selectedImageFile!,
                       width: 200,
@@ -178,25 +191,13 @@ class _GraphPageState extends State<GraphPage> {
                       await picker.pickImage(source: ImageSource.gallery);
 
                       if (pickedFile != null) {
-                        // 선택한 이미지 파일 저장
                         setState(() {
                           selectedImageFile = File(pickedFile.path);
                         });
 
-                        // 로컬 상태 업데이트
-                        setState(() {
-                          taskGoals = taskGoals.map((goal) {
-                            if (goal['id'] == taskId) {
-                              final updatedImages = List<String>.from(goal['images']);
-                              if (updatedImages.length <= index) {
-                                updatedImages.length = index + 1; // 배열 확장
-                              }
-                              updatedImages[index] = pickedFile.path;
-                              return {...goal, 'images': updatedImages};
-                            }
-                            return goal;
-                          }).toList();
-                        });
+                        // shared_preferences에 경로 저장
+                        await saveImagePath(taskId, index, pickedFile.path);
+                        print("Image path saved: ${pickedFile.path}");
                       }
                     },
                     child: const Text("Choose Image"),
@@ -207,6 +208,7 @@ class _GraphPageState extends State<GraphPage> {
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pop(); // 모달창 닫기
+                    setState(() {}); // UI 업데이트
                   },
                   child: const Text("OK"),
                 ),
@@ -419,78 +421,79 @@ class _GraphPageState extends State<GraphPage> {
                     return const Center(child: Text("Please add Comment"));
                   }
                   final taskGoal = taskGoals[currentPageIndex];
-                  final images =
-                      taskGoal['images'] as List<dynamic>; // images 리스트 가져오기
-                  final imageUrl = (images.length > index)
-                      ? images[index] as String
-                      : ""; // index에 해당하는 이미지 URL
 
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 16.0),
-                    padding: const EdgeInsets.all(5),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onDoubleTap: () => _showImagePickerModal(context, taskGoal['id'], index),
-                          child: imageUrl.isEmpty
-                              ? Icon(
-                            Icons.image,
-                            size: 40,
-                            color: Colors.blueAccent,
-                          )
-                              : Image.file(
-                            File(imageUrl), // 로컬 이미지 경로를 File 객체로 변환
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: GestureDetector(
-                            onDoubleTap: () => _showCommentModal(
-                              context,
-                              taskGoal['id'],
-                              index,
-                              (expected, comment) {
-                                saveCommentToFirebase(
-                                    taskGoal['id'], index, expected, comment);
-                              },
+                  return FutureBuilder<String?>(
+                    future: loadImagePath(taskGoal['id'], index), // 로컬 경로 불러오기
+                    builder: (context, snapshot) {
+                      final imageUrl = snapshot.data ?? ""; // 경로가 없으면 빈 값
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 16.0),
+                        padding: const EdgeInsets.all(5),
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onDoubleTap: () =>
+                                  _showImagePickerModal(context, taskGoal['id'], index),
+                              child: imageUrl.isEmpty
+                                  ? Icon(
+                                Icons.image,
+                                size: 40,
+                                color: Colors.blueAccent,
+                              )
+                                  : Image.file(
+                                File(imageUrl), // 로컬 경로의 이미지 파일
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  taskGoal['comments'].length > index * 2 &&
+                            const SizedBox(width: 20),
+                            Expanded(
+                              child: GestureDetector(
+                                onDoubleTap: () => _showCommentModal(
+                                  context,
+                                  taskGoal['id'],
+                                  index,
+                                      (expected, comment) {
+                                    saveCommentToFirebase(
+                                        taskGoal['id'], index, expected, comment);
+                                  },
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      taskGoal['comments'].length > index * 2 &&
                                           taskGoal['comments'][index * 2] != ""
-                                      ? "${taskGoal['comments'][index * 2]}"
-                                      : "No Expected Achievement",
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black,
-                                  ),
+                                          ? "${taskGoal['comments'][index * 2]}"
+                                          : "No Expected Achievement",
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      taskGoal['comments'].length > index * 2 + 1 &&
+                                          taskGoal['comments'][index * 2 + 1] != ""
+                                          ? """Comment: 
+                          ${taskGoal['comments'][index * 2 + 1]}"""
+                                          : "No Comment",
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.normal,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  taskGoal['comments'].length > index * 2 + 1 &&
-                                          taskGoal['comments'][index * 2 + 1] !=
-                                              ""
-                                      ? """Comment: 
-                                      ${taskGoal['comments'][index * 2 + 1]}"""
-                                      : "No Comment",
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.normal,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 },
               ),
